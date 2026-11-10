@@ -13,21 +13,18 @@ from __future__ import annotations
 from typing import Optional
 
 from ..models import Captured, PacketInfo
-from .app_dns import parse_dns
-from .app_http import parse_http
-from .icmp import parse_icmp
-from .link_ip import parse_ethernet, parse_ip
-from .transport import parse_tcp, parse_udp
 
-__all__ = [
-    "decode",
-    "parse_ethernet", "parse_ip",      # A
-    "parse_tcp", "parse_udp",          # B
-    "parse_icmp",                      # D
-    "parse_dns", "parse_http",         # C
-]
+__all__ = ["decode"]
 
 
 def decode(captured: Captured) -> Optional[PacketInfo]:
     """Captured → PacketInfo, 해석 대상이 아니면(IPv4 아님 등) None."""
+    # 하위 파서는 여기(함수 안)에서 불러온다. 파일 맨 위로 옮기지 말 것.
+    # → 한 사람 파일의 오류가 다른 팀원의 단위 테스트(src.decode.* import)를 깨뜨리지 않게 하기 위함.
+    from .app_dns import parse_dns                # C
+    from .app_http import parse_http              # C
+    from .icmp import parse_icmp                  # D
+    from .link_ip import parse_ethernet, parse_ip  # A
+    from .transport import parse_tcp, parse_udp   # B
+
     raise NotImplementedError
