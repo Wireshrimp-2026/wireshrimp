@@ -115,8 +115,11 @@ wireshrimp/
 ### 완료 기준
 
 - [ ] **A** — `sudo` 실행 시 `curl http://neverssl.com` 트래픽이 OUT/IN 구분되어 PacketInfo로 나온다. IP·TTL이 Wireshark와 일치한다.
+
 - [ ] **B** — Seq/Ack/Flags가 Wireshark와 일치한다. 접속 1회가 Session 1개로 묶이고, SYN·SYN/ACK·ACK·FIN이 모두 붙는다. traceroute 프로브와 ICMP 응답이 짝지어진다.
+
 - [ ] **C** — DNS 질의 도메인·응답 IP, HTTP 메서드·상태 코드가 Wireshark와 일치한다. dns_ms, tcp_connect_ms, http_first_byte_ms, total_ms, 홉별 지연이 계산된다.
+
 - [ ] **D** — 설계안 출력 예시 모양의 타임라인이 찍힌다. CSV가 2.6 형식으로 쌓인다. 조건별 평균·최대·표준편차 그래프와 단계 누적 막대 그래프가 나온다.
 
 ### 공통 약속
