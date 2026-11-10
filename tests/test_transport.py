@@ -1,11 +1,11 @@
 # =============================================================================
 # 담당자  : B
-# 맡은 기능: TCP·UDP·ICMP 파싱 단위 테스트 (샘플: tests/samples/)
-# 완료 기준: Seq/Ack/Flags가 Wireshark와 일치한다. 접속 1회가 Session 1개로 묶이고 SYN·SYN/ACK·ACK·FIN이 모두 붙는다. traceroute 프로브와 ICMP 응답이 짝지어진다.
+# 맡은 기능: TCP·UDP 파싱 단위 테스트 (샘플: tests/samples/)
+# 완료 기준: Seq/Ack/Flags, UDP 포트·Length가 Wireshark와 일치한다. 접속 1회가 Session 1개로 묶이고, SYN·SYN/ACK·ACK·HTTP 요청·응답·FIN이 모두 붙는다.
 # =============================================================================
 import unittest
 
-from src.decode.transport import parse_icmp, parse_tcp, parse_udp  # noqa: F401
+from src.decode.transport import parse_tcp, parse_udp  # noqa: F401
 
 
 class TestParseTcp(unittest.TestCase):
@@ -14,11 +14,6 @@ class TestParseTcp(unittest.TestCase):
 
 
 class TestParseUdp(unittest.TestCase):
-    def test_todo(self):
-        self.skipTest("TODO: 테스트 작성")
-
-
-class TestParseIcmp(unittest.TestCase):
     def test_todo(self):
         self.skipTest("TODO: 테스트 작성")
 

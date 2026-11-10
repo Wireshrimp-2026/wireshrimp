@@ -4,8 +4,9 @@
 #            - 실시간 한 줄 출력: "[DNS] OUT 10.0.2.15 -> 8.8.8.8 query A neverssl.com id=0x1a2b"
 #            - 접속 1회 요약 타임라인 ([DNS] → [ROUTE] → [TCP] → [HTTP] → [TCP] 종료)
 #            - CSV 기록 (models.CSV_COLUMNS 순서, None은 빈 칸, hop_delays는 "2.1;*;14.8")
-# 완료 기준: 설계안 출력 예시 모양의 타임라인이 찍힌다. CSV가 2.6 형식으로 쌓인다.
-#            조건별 평균·최대·표준편차 그래프와 단계 누적 막대 그래프가 나온다.
+# 완료 기준: ICMP Type·Code·원본 목적지 IP·포트가 Wireshark와 일치한다. traceroute 프로브와
+#            ICMP 응답이 짝지어져 홉별 지연이 계산된다. 설계안 출력 예시 모양의 타임라인이
+#            찍히고 CSV가 2.6 형식으로 쌓인다.
 # =============================================================================
 from __future__ import annotations
 

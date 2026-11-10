@@ -1,7 +1,7 @@
 # =============================================================================
 # 담당자  : B
 # 맡은 기능: F3 접속 단위로 묶기 단위 테스트 (샘플: tests/samples/)
-# 완료 기준: Seq/Ack/Flags가 Wireshark와 일치한다. 접속 1회가 Session 1개로 묶이고 SYN·SYN/ACK·ACK·FIN이 모두 붙는다. traceroute 프로브와 ICMP 응답이 짝지어진다.
+# 완료 기준: Seq/Ack/Flags, UDP 포트·Length가 Wireshark와 일치한다. 접속 1회가 Session 1개로 묶이고, SYN·SYN/ACK·ACK·HTTP 요청·응답·FIN이 모두 붙는다.
 # =============================================================================
 import unittest
 

@@ -1,10 +1,12 @@
 # =============================================================================
 # 담당자  : A (수정은 PR + 한 명 이상 확인)
 # 맡은 기능: 실행 시작점 — 옵션 처리, F1 → F2 → F3 → F4 → F5 전체 연결
+#            (F3 접속 묶기와 경로 추적 결과를 합쳐 Session·LatencyResult 완성)
 #            sudo python3 -m src.main --target neverssl.com --dns-server google \
 #                 --network school-wifi --csv results/exp_a.csv
 # 완료 기준: sudo 실행 시 curl http://neverssl.com 트래픽이 OUT/IN 구분되어
 #            PacketInfo로 나온다. IP·TTL이 Wireshark와 일치한다.
+#            실험 스크립트로 조건별 반복 실행 시 CSV가 쌓인다.
 # =============================================================================
 from __future__ import annotations
 
@@ -14,6 +16,7 @@ from .capture import CaptureFilter, capture
 from .decode import decode
 from .latency import measure
 from .output import CsvWriter, print_packet, print_timeline
+from .route import RouteTracker, hop_delays
 from .session import SessionBuilder
 
 
@@ -34,9 +37,10 @@ def main(argv: list[str] | None = None) -> None:
 
     # F1 캡처 준비
     cap_filter = CaptureFilter()
-    builder = SessionBuilder()
+    builder = SessionBuilder()   # F3 (B)
+    tracker = RouteTracker()     # 경로 (D)
 
-    # F1 캡처 → F2 해석 → (실시간 출력) → F3 묶기   (Ctrl+C로 캡처 종료)
+    # F1 캡처 → F2 해석 → (실시간 출력) → F3 묶기 + 경로 추적   (Ctrl+C로 캡처 종료)
     try:
         for captured in capture(cap_filter):
             pkt = decode(captured)
@@ -44,15 +48,18 @@ def main(argv: list[str] | None = None) -> None:
                 continue
             print_packet(pkt)
             builder.add(pkt)
+            tracker.add(pkt)
     except KeyboardInterrupt:
         pass
 
-    # F4 지연 측정 → F5 타임라인 출력 · CSV 저장
+    # 경로 붙이기 → F4 지연 측정 + 홉별 지연 → F5 타임라인 출력 · CSV 저장
     writer = CsvWriter(args.csv, args.dns_server, args.network) if args.csv else None
     for session in builder.sessions():
         if session.domain != args.target:
             continue
+        session.route_probes = tracker.probes_for(session.server_ip)
         result = measure(session)
+        result.hops = hop_delays(session.route_probes)
         print_timeline(session, result)
         if writer is not None:
             writer.write(result)

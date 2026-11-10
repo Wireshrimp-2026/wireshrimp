@@ -81,46 +81,48 @@ wireshrimp/
 │  ├─ decode/
 │  │  ├─ __init__.py         decode() — 계층 파서 합치기            A
 │  │  ├─ link_ip.py          Ethernet, IP                         A
-│  │  ├─ transport.py        TCP, UDP, ICMP                       B
+│  │  ├─ transport.py        TCP, UDP                             B
+│  │  ├─ icmp.py             ICMP                                 D
 │  │  ├─ app_dns.py          DNS                                  C
 │  │  └─ app_http.py         HTTP                                 C
 │  ├─ session.py             F3 접속 단위로 묶기                   B
-│  ├─ latency.py             F4 지연 측정                          C
+│  ├─ route.py               traceroute 경로 추적·홉별 지연         D
+│  ├─ latency.py             F4 단계별 지연 측정                   C
 │  └─ output.py              F5 화면 출력 + CSV                    D
 ├─ experiments/
-│  ├─ run_dns_exp.sh         실험 A: DNS 서버별 dig 반복           D
-│  ├─ run_net_exp.sh         실험 B: curl + traceroute 반복        D
-│  ├─ domains.txt            실험용 도메인 목록                     D
-│  └─ plot.py                CSV → 막대 그래프                     D
+│  ├─ run_dns_exp.sh         실험 A: DNS 서버별 dig 반복           A
+│  ├─ run_net_exp.sh         실험 B: curl + traceroute 반복        A
+│  ├─ domains.txt            실험용 도메인 목록                     A
+│  └─ plot.py                CSV → 막대 그래프                     C
 ├─ tests/
 │  ├─ samples/               Wireshark에서 뽑은 hex 샘플            각자
 │  ├─ test_link_ip.py                                             A
 │  ├─ test_transport.py  test_session.py                          B
 │  ├─ test_dns.py  test_http.py  test_latency.py                  C
-│  └─ test_output.py                                              D
-└─ results/                  실험 CSV, 그래프 이미지                 D
+│  └─ test_icmp.py  test_route.py  test_output.py                 D
+└─ results/                  실험 CSV, 그래프 이미지
 ```
 
 ## 역할 분배
 
 팀원: **김준서 · 오현근 · 라승민 · 강정란** (A~D 배정은 팀에서 결정)
 
-| 담당 | 맡는 부분 | 핵심 산출물 |
+| 담당 | 맡는 부분 | 파일 (본인만 수정) |
 |---|---|---|
-| **A — 캡처·통합** | F1 캡처 (AF_PACKET, OUT/IN 판별, 필터, 시각 기록) · Ethernet/IP 파싱 · `decode()` · `models.py` · `main.py` · README · Wireshark 검증 | 패킷이 잡혀서 `PacketInfo`로 나오는 것 |
-| **B — 전송 계층·접속 묶기** | TCP/UDP/ICMP 파싱 (ICMP 안 원본 IP·UDP 포함) · F3 접속 묶기 (DNS 응답 IP ↔ SYN, 4개 묶음, HTTP·FIN·traceroute 붙이기) | `Session` 목록 |
-| **C — 응용 계층·지연 측정** | DNS 파싱 (이름 압축 포인터 포함) · HTTP 파싱 · F4 지연 측정 (Transaction ID, 4개 묶음, ICMP 원본 포트 짝) | `LatencyResult` |
-| **D — 출력·실험** | F5 실시간 출력·타임라인·CSV · 비교 실험 A·B 스크립트와 측정 · 그래프 (평균·최대·표준편차, 단계 누적 막대) | CSV + 그래프 |
+| **A — 캡처·통합** | F1 캡처 (AF_PACKET, OUT/IN 판별, 필터, 시각 기록) · Ethernet/IP 파싱 · `decode()` 합치기 · 전체 실행 흐름 · 실험 실행 스크립트 | `capture.py` `decode/link_ip.py` `decode/__init__.py` `main.py` `models.py` `experiments/run_*.sh` `domains.txt` |
+| **B — 전송 계층·연결 추적** | TCP/UDP 파싱 · F3 접속 묶기 (DNS 응답 IP ↔ SYN, 4개 묶음, HTTP·FIN 붙이기) | `decode/transport.py` `session.py` |
+| **C — 응용 계층·지연** | DNS 파싱 (이름 압축 포인터 포함) · HTTP 파싱 · F4 단계별 지연 (DNS·TCP 연결·HTTP 첫 응답·전체) · 그래프 (평균·최대·표준편차, 단계 누적 막대) | `decode/app_dns.py` `decode/app_http.py` `latency.py` `experiments/plot.py` |
+| **D — 경로·출력** | ICMP 파싱 (안에 담긴 원본 IP·UDP) · traceroute 경로 추적 (프로브 ↔ ICMP 짝, 홉별 지연) · F5 실시간 출력·타임라인·CSV | `decode/icmp.py` `route.py` `output.py` |
 
 ### 완료 기준
 
-- [ ] **A** — `sudo` 실행 시 `curl http://neverssl.com` 트래픽이 OUT/IN 구분되어 PacketInfo로 나온다. IP·TTL이 Wireshark와 일치한다.
+- [ ] **A** — `sudo` 실행 시 `curl http://neverssl.com` 트래픽이 OUT/IN 구분되어 PacketInfo로 나온다. IP·TTL이 Wireshark와 일치한다. 실험 스크립트로 조건별 반복 실행 시 CSV가 쌓인다.
 
-- [ ] **B** — Seq/Ack/Flags가 Wireshark와 일치한다. 접속 1회가 Session 1개로 묶이고, SYN·SYN/ACK·ACK·FIN이 모두 붙는다. traceroute 프로브와 ICMP 응답이 짝지어진다.
+- [ ] **B** — Seq/Ack/Flags, UDP 포트·Length가 Wireshark와 일치한다. 접속 1회가 Session 1개로 묶이고, SYN·SYN/ACK·ACK·HTTP 요청·응답·FIN이 모두 붙는다.
 
-- [ ] **C** — DNS 질의 도메인·응답 IP, HTTP 메서드·상태 코드가 Wireshark와 일치한다. dns_ms, tcp_connect_ms, http_first_byte_ms, total_ms, 홉별 지연이 계산된다.
+- [ ] **C** — DNS 질의 도메인·응답 IP, HTTP 메서드·상태 코드가 Wireshark와 일치한다. dns_ms, tcp_connect_ms, http_first_byte_ms, total_ms가 계산된다. 조건별 평균·최대·표준편차 그래프와 단계 누적 막대 그래프가 나온다.
 
-- [ ] **D** — 설계안 출력 예시 모양의 타임라인이 찍힌다. CSV가 2.6 형식으로 쌓인다. 조건별 평균·최대·표준편차 그래프와 단계 누적 막대 그래프가 나온다.
+- [ ] **D** — ICMP Type·Code·원본 목적지 IP·포트가 Wireshark와 일치한다. traceroute 프로브와 ICMP 응답이 짝지어져 홉별 지연이 계산된다. 설계안 출력 예시 모양의 타임라인이 찍히고 CSV가 2.6 형식으로 쌓인다.
 
 ### 공통 약속
 
@@ -135,7 +137,7 @@ wireshrimp/
 |---|---|
 | 저장소 | 조직 [`Wireshrimp-2026`](https://github.com/orgs/Wireshrimp-2026/repositories) 아래 `wireshrimp` 1개 |
 | `main` | **항상 실행되는 상태** 유지 |
-| 브랜치 | `feat/capture` · `feat/transport` · `feat/session` · `feat/dns-http` · `feat/latency` · `feat/output` · `feat/experiments` |
+| 브랜치 | A `feat/capture` `feat/experiments` · B `feat/transport` `feat/session` · C `feat/dns-http` `feat/latency` `feat/plot` · D `feat/icmp-route` `feat/output` |
 | 바로 push | **내 파일만 고치는 작은 수정** (push 전 `git pull` 필수) |
 | main 직접 push | **단순 버그 수정, 주석·오타 수정** → PR 없이 `main`에 바로 push 가능 (push 전 `git pull` 필수) |
 | PR 필요 | **새 기능, 큰 수정, 남의 파일, `models.py`, `main.py`** → 한 명 이상 확인 후 merge |

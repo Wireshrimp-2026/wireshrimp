@@ -7,6 +7,7 @@
 #            - 대상 서버 IP, 포트(53, 80), ICMP, traceroute 포트만 남기는 필터
 # 완료 기준: sudo 실행 시 curl http://neverssl.com 트래픽이 OUT/IN 구분되어
 #            PacketInfo로 나온다. IP·TTL이 Wireshark와 일치한다.
+#            실험 스크립트로 조건별 반복 실행 시 CSV가 쌓인다.
 # =============================================================================
 from __future__ import annotations
 
