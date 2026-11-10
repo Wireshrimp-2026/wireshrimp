@@ -1,0 +1,33 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- 에디터 / OS ---
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# --- results/: 큰 파일은 올리지 않는다 ---
+# 실험 CSV와 보고서용 그래프(.png)는 올리고, 원본 캡처·로그·임시 파일은 제외
+*.pcap
+*.pcapng
+results/raw/
+results/tmp/
+results/**/*.log
+results/**/*.pcap*
+results/**/*.svg
+results/**/*.pdf
+results/**/*.zip
