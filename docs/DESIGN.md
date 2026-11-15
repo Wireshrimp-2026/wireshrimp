@@ -1,7 +1,7 @@
 # Raw Socket 기반 웹 접속 과정·지연 분석기 — 뼈대 설계 및 역할 분배
 
 > 기준 문서: 팀 설계안 「Raw Socket 기반 웹 접속 과정·지연 분석기」
-> 팀원: 김준서, 오현근, 라승민, 강정란 → 아래에서는 **A, B, C, D**로 부른다. (배정은 팀에서 결정)
+> 팀원: **A 김준서, B 라승민, C 강정란, D 오현근** → 아래에서는 **A, B, C, D**로 부른다.
 > 이 문서는 **코드가 아니라 설계**다. 네 명은 이 문서의 폴더 구조, 데이터 형식, 함수 모양을 그대로 따라 각자 자기 파일을 만든다.
 
 ---
@@ -202,10 +202,10 @@ sudo python3 -m src.main --iface wlo1 --target neverssl.com --dns-server google 
 
 | 담당 | 맡는 부분 | 파일 (본인만 수정) | 핵심 산출물 |
 |---|---|---|---|
-| **A — 캡처·통합** | F1 캡처 (AF_PACKET, OUT/IN 판별, 필터, 시각 기록) / Ethernet·IP 파싱 / `decode()` 합치기 / 전체 실행 흐름 / 실험 실행 스크립트 | `capture.py` `decode/link_ip.py` `decode/__init__.py` `main.py` `models.py` `experiments/run_*.sh` `domains.txt` | 패킷이 잡혀서 PacketInfo로 나오는 것 |
-| **B — 전송 계층·연결 추적** | TCP·UDP 파싱 / **F3 접속 묶기** (DNS 응답 IP ↔ SYN 연결, 4개 묶음, HTTP·FIN 붙이기) | `decode/transport.py` `session.py` | Session 목록 |
-| **C — 응용 계층·지연** | DNS 파싱 (이름 압축 포인터 포함) / HTTP 파싱 / **F4 단계별 지연** (Transaction ID 짝, 4개 묶음 짝) / 그래프 (평균·최대·표준편차, 단계 누적 막대) | `decode/app_dns.py` `decode/app_http.py` `latency.py` `experiments/plot.py` | LatencyResult, 그래프 |
-| **D — 경로·출력** | ICMP 파싱 (안에 담긴 원본 IP·UDP 꺼내기) / **traceroute 경로 추적** (프로브 ↔ ICMP 짝, 홉별 지연) / **F5** 실시간 출력, 타임라인, CSV | `decode/icmp.py` `route.py` `output.py` | 홉별 지연, 화면 출력, CSV |
+| **A 김준서** — **캡처·통합** | F1 캡처 (AF_PACKET, OUT/IN 판별, 필터, 시각 기록) / Ethernet·IP 파싱 / `decode()` 합치기 / 전체 실행 흐름 / 실험 실행 스크립트 | `capture.py` `decode/link_ip.py` `decode/__init__.py` `main.py` `models.py` `experiments/run_*.sh` `domains.txt` | 패킷이 잡혀서 PacketInfo로 나오는 것 |
+| **B 라승민** — **전송 계층·연결 추적** | TCP·UDP 파싱 / **F3 접속 묶기** (DNS 응답 IP ↔ SYN 연결, 4개 묶음, HTTP·FIN 붙이기) | `decode/transport.py` `session.py` | Session 목록 |
+| **C 강정란** — **응용 계층·지연** | DNS 파싱 (이름 압축 포인터 포함) / HTTP 파싱 / **F4 단계별 지연** (Transaction ID 짝, 4개 묶음 짝) / 그래프 (평균·최대·표준편차, 단계 누적 막대) | `decode/app_dns.py` `decode/app_http.py` `latency.py` `experiments/plot.py` | LatencyResult, 그래프 |
+| **D 오현근** — **경로·출력** | ICMP 파싱 (안에 담긴 원본 IP·UDP 꺼내기) / **traceroute 경로 추적** (프로브 ↔ ICMP 짝, 홉별 지연) / **F5** 실시간 출력, 타임라인, CSV | `decode/icmp.py` `route.py` `output.py` | 홉별 지연, 화면 출력, CSV |
 
 **이렇게 나눈 이유**
 - 파일 하나에 주인이 한 명 → 같은 파일을 동시에 고칠 일이 없다.
@@ -267,10 +267,10 @@ A(F1, F2 하위) ─▶ B(TCP·UDP) · D(ICMP) · C(DNS·HTTP) ─▶ B(F3) · D
 
 ## 9. 완료 기준 (각자 체크)
 
-- [ ] **A**: `sudo` 실행 시 `curl http://neverssl.com` 트래픽이 OUT/IN 구분되어 PacketInfo로 나온다. IP·TTL이 Wireshark와 일치한다. 실험 스크립트로 조건별 반복 실행 시 CSV가 쌓인다.
+- [ ] **A 김준서**: `sudo` 실행 시 `curl http://neverssl.com` 트래픽이 OUT/IN 구분되어 PacketInfo로 나온다. IP·TTL이 Wireshark와 일치한다. 실험 스크립트로 조건별 반복 실행 시 CSV가 쌓인다.
 
-- [ ] **B**: Seq/Ack/Flags, UDP 포트·Length가 Wireshark와 일치한다. 접속 1회가 Session 1개로 묶이고, SYN·SYN/ACK·ACK·HTTP 요청·응답·FIN이 모두 붙는다.
+- [ ] **B 라승민**: Seq/Ack/Flags, UDP 포트·Length가 Wireshark와 일치한다. 접속 1회가 Session 1개로 묶이고, SYN·SYN/ACK·ACK·HTTP 요청·응답·FIN이 모두 붙는다.
 
-- [ ] **C**: DNS 질의 도메인·응답 IP, HTTP 메서드·상태 코드가 Wireshark와 일치한다. dns_ms, tcp_connect_ms, http_first_byte_ms, total_ms가 계산된다. 조건별 평균·최대·표준편차 그래프와 단계 누적 막대 그래프가 나온다.
+- [ ] **C 강정란**: DNS 질의 도메인·응답 IP, HTTP 메서드·상태 코드가 Wireshark와 일치한다. dns_ms, tcp_connect_ms, http_first_byte_ms, total_ms가 계산된다. 조건별 평균·최대·표준편차 그래프와 단계 누적 막대 그래프가 나온다.
 
-- [ ] **D**: ICMP Type·Code·원본 목적지 IP·포트가 Wireshark와 일치한다. traceroute 프로브와 ICMP 응답이 짝지어져 홉별 지연이 계산된다. 설계안 출력 예시 모양의 타임라인이 찍히고 CSV가 2.6 형식으로 쌓인다.
+- [ ] **D 오현근**: ICMP Type·Code·원본 목적지 IP·포트가 Wireshark와 일치한다. traceroute 프로브와 ICMP 응답이 짝지어져 홉별 지연이 계산된다. 설계안 출력 예시 모양의 타임라인이 찍히고 CSV가 2.6 형식으로 쌓인다.
