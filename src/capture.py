@@ -2,6 +2,8 @@
 # 담당자  : A
 # 맡은 기능: F1 캡처
 #            - socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL))로 모든 프레임 수신 (root)
+#            - filter.iface 인터페이스 하나에만 bind((iface, 0))
+#              (tailscale0 같은 tun 장치는 이더넷 헤더가 없어 parse_ethernet이 깨짐, lo는 패킷이 두 번 보임)
 #            - recvfrom() 주소 정보의 pkttype == PACKET_OUTGOING(4) → "OUT", 그 외 → "IN"
 #            - 받은 시각(time.time()) 기록
 #            - 대상 서버 IP, 포트(53, 80), ICMP, traceroute 포트만 남기는 필터
@@ -20,6 +22,7 @@ from .models import Captured
 @dataclass
 class CaptureFilter:
     """캡처할 트래픽 조건."""
+    iface: str = ""                                       # 캡처할 인터페이스 (예: wlo1, enp0s3) — ip -br link로 확인
     server_ips: list[str] = field(default_factory=list)   # 대상 서버 IP 목록 (비어 있으면 IP로 거르지 않음)
     ports: tuple[int, ...] = (53, 80)                      # 남길 TCP/UDP 포트
     allow_icmp: bool = True                                # ICMP 허용 여부

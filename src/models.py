@@ -76,7 +76,7 @@ class PacketInfo:
     ttl: int
     proto: str                            # "TCP" / "UDP" / "ICMP" / "OTHER"
 
-    # --- B: TCP / UDP / ICMP ---
+    # --- B: TCP / UDP ---
     src_port: Optional[int] = None        # TCP/UDP일 때만
     dst_port: Optional[int] = None
     tcp_flags: Optional[str] = None       # "SYN", "SYN,ACK", "FIN,ACK" (순서: SYN,FIN,RST,PSH,ACK)
@@ -84,10 +84,12 @@ class PacketInfo:
     ack: Optional[int] = None
     window: Optional[int] = None
     udp_length: Optional[int] = None      # UDP일 때만
+    # --- D: ICMP ---
     icmp_type: Optional[int] = None       # ICMP일 때만
     icmp_code: Optional[int] = None
     icmp_orig_dst_ip: Optional[str] = None    # ICMP 안 원본 IP 헤더의 목적지
     icmp_orig_dst_port: Optional[int] = None  # ICMP 안 원본 UDP 목적지 포트 (traceroute 짝)
+    # --- B ---
     payload_len: int = 0                  # 전송 계층 헤더를 뗀 데이터 길이
 
     # --- C: DNS / HTTP ---

@@ -4,6 +4,8 @@
 # 맡은 기능: 실험 A — DNS 서버별 응답 시간 (통신사 기본 · Google 8.8.8.8 · Cloudflare 1.1.1.1)
 #            domains.txt의 도메인을 번갈아 dig @서버 로 조건별 30회 반복
 #            (캐시 주의: 첫 질의와 반복 질의를 따로 기록)
+#            - dig -4 @서버 A 도메인  (@서버를 주면 로컬 resolved 캐시를 거치지 않음)
+#            - 분석기는 도메인마다 --target으로 실행, sudo timeout -s INT <초> 로 자동 종료
 # 완료 기준: sudo 실행 시 curl http://neverssl.com 트래픽이 OUT/IN 구분되어
 #            PacketInfo로 나온다. IP·TTL이 Wireshark와 일치한다.
 #            실험 스크립트로 조건별 반복 실행 시 CSV가 쌓인다.

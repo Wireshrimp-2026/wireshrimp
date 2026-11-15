@@ -32,7 +32,7 @@ F1 캡처 ──▶ F2 계층별 해석 ──▶ F3 접속 단위로 묶기 ─
 | 운영체제 | Ubuntu 22.04 이상 (윈도우 PC는 VirtualBox **브리지 모드**) |
 | 언어 | Python 3 — `socket`, `struct`만 사용 (**scapy, libpcap 금지**). 그래프만 matplotlib |
 | 권한 | `sudo` (AF_PACKET raw socket) |
-| 트래픽 발생 | `curl http://neverssl.com`, `dig`, `traceroute` |
+| 트래픽 발생 | `curl -4 http://neverssl.com`, `dig`, `traceroute -4` (IPv4만 분석하므로 `-4` 필수) |
 | 검증 | Wireshark 캡처와 필드 값 비교 |
 
 ## 실행 방법
@@ -45,21 +45,24 @@ cd wireshrimp
 분석기 실행 (저장소 루트에서, 캡처는 `Ctrl+C`로 종료):
 
 ```bash
-sudo python3 -m src.main --target neverssl.com --dns-server google --network school-wifi --csv results/exp_a.csv
+sudo python3 -m src.main --iface wlo1 --target neverssl.com --dns-server google --network school-wifi --csv results/exp_a.csv
 ```
 
 다른 터미널에서 트래픽 발생:
 
 ```bash
-curl http://neverssl.com
+curl -4 http://neverssl.com
 ```
 
 | 옵션 | 필수 | 설명 |
 |---|---|---|
+| `--iface` | ✅ | 캡처할 인터페이스 (`ip -br link`로 확인. 예: `wlo1`, VirtualBox는 `enp0s3`) |
 | `--target` | ✅ | 분석할 도메인 (예: `neverssl.com`) |
 | `--dns-server` | ✅ | 실험 조건 라벨 — DNS 서버 (예: `isp`, `google`, `cloudflare`) |
 | `--network` | ✅ | 실험 조건 라벨 — 네트워크 (예: `school-wifi`, `home-wifi`, `hotspot`) |
 | `--csv` | | 결과를 쌓을 CSV 경로 |
+
+> 반복 측정 시 주의: Ubuntu는 DNS 응답을 캐시하므로(systemd-resolved) 매 회 `sudo resolvectl flush-caches` 후 `curl`을 실행한다. 분석기는 `sudo timeout -s INT 60 python3 -m src.main ...`처럼 시간 제한을 걸면 Ctrl+C 없이 끝난다.
 
 테스트 실행:
 

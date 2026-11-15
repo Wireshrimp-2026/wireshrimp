@@ -4,6 +4,7 @@
 #            1. DNS 응답에서 도메인 → IP 짝 저장
 #            2. 그 IP로 향하는 SYN → 새 TCP 연결 (내 IP, 내 포트, 서버 IP, 서버 포트)
 #            3. 같은 4개 묶음의 HTTP 요청·응답, FIN을 같은 접속에 붙이기
+#            4. dig처럼 TCP 연결이 없는 DNS 질의·응답도 Session 1개로 내놓기 (syn 등은 None) — 실험 A용
 #            (traceroute 경로는 route.py — D, route_probes는 main.py가 채움)
 # 완료 기준: Seq/Ack/Flags, UDP 포트·Length가 Wireshark와 일치한다. 접속 1회가 Session 1개로
 #            묶이고, SYN·SYN/ACK·ACK·HTTP 요청·응답·FIN이 모두 붙는다.

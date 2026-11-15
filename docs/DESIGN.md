@@ -98,6 +98,8 @@ F1 캡처 ──▶ F2 계층별 해석 ──▶ F3 접속 단위로 묶기 ─
 | `route_probes` | list[(PacketInfo, PacketInfo \| None)] | (traceroute UDP 프로브, 짝지은 ICMP 응답 또는 None) |
 | `packets` | list[PacketInfo] | 이 접속에 속한 모든 패킷 (시간순, 타임라인 출력용) |
 
+> `dig`처럼 TCP 연결이 없는 DNS 질의·응답도 Session 1개로 만든다 (`syn` 이후 필드는 None). 실험 A가 이 경우다.
+
 ### 2.5 LatencyResult — F4 → F5
 | 필드 | 타입 | 설명 |
 |---|---|---|
@@ -128,7 +130,7 @@ measured_at, dns_server, network, domain, dns_ms, tcp_connect_ms, http_first_byt
 | 파일 | 공개 함수 | 입력 → 출력 | 담당 |
 |---|---|---|---|
 | `capture.py` | `capture(filter)` | 필터 설정 → `Captured`를 하나씩 내보내는 제너레이터 | A |
-| `capture.py` | `CaptureFilter` | 대상 서버 IP 목록, 포트(53, 80), ICMP 허용, traceroute 포트 범위 | A |
+| `capture.py` | `CaptureFilter` | 캡처 인터페이스, 대상 서버 IP 목록, 포트(53, 80), ICMP 허용, traceroute 포트 범위 | A |
 | `decode/link_ip.py` | `parse_ethernet(frame)` | bytes → (MAC 정보, EtherType, 나머지 bytes) | A |
 | `decode/link_ip.py` | `parse_ip(data)` | bytes → (IP 필드 dict, 나머지 bytes) | A |
 | `decode/transport.py` | `parse_tcp(data)`, `parse_udp(data)` | bytes → (필드 dict, 나머지 bytes) | B |
@@ -136,7 +138,7 @@ measured_at, dns_server, network, domain, dns_ms, tcp_connect_ms, http_first_byt
 | `decode/app_dns.py` | `parse_dns(data)` | bytes → `DnsInfo` | C |
 | `decode/app_http.py` | `parse_http(data)` | bytes → `HttpInfo` 또는 None (첫 줄이 HTTP가 아니면) | C |
 | `decode/__init__.py` | `decode(captured)` | `Captured` → `PacketInfo` 또는 None (IPv4 아님 등). 위 함수들을 차례로 호출해 하나로 합침 | A |
-| `session.py` | `SessionBuilder.add(pkt)` / `.sessions()` | PacketInfo를 하나씩 받음 → 완성된 `Session` 목록 | B |
+| `session.py` | `SessionBuilder.add(pkt)` / `.sessions()` | PacketInfo를 하나씩 받음 → 완성된 `Session` 목록 (TCP 없는 DNS만의 접속도 포함) | B |
 | `route.py` | `RouteTracker.add(pkt)` / `.probes_for(server_ip)` | PacketInfo를 하나씩 받음 → 해당 서버로 보낸 `[(프로브, ICMP 응답 또는 None), ...]` | D |
 | `route.py` | `hop_delays(probes)` | `[(프로브, 응답)]` → `[(홉 번호, 라우터 IP, 지연 ms)]` (무응답은 None) | D |
 | `latency.py` | `measure(session)` | `Session` → `LatencyResult` (dns·tcp·http·total, `hops`는 빈 목록) | C |
@@ -191,7 +193,7 @@ wireshrimp/
 
 **실행 모양 (main.py)**
 ```
-sudo python3 -m src.main --target neverssl.com --dns-server google --network school-wifi --csv results/exp_a.csv
+sudo python3 -m src.main --iface wlo1 --target neverssl.com --dns-server google --network school-wifi --csv results/exp_a.csv
 ```
 
 ---

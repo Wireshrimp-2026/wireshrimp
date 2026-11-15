@@ -2,7 +2,7 @@
 # 담당자  : A (수정은 PR + 한 명 이상 확인)
 # 맡은 기능: 실행 시작점 — 옵션 처리, F1 → F2 → F3 → F4 → F5 전체 연결
 #            (F3 접속 묶기와 경로 추적 결과를 합쳐 Session·LatencyResult 완성)
-#            sudo python3 -m src.main --target neverssl.com --dns-server google \
+#            sudo python3 -m src.main --iface wlo1 --target neverssl.com --dns-server google \
 #                 --network school-wifi --csv results/exp_a.csv
 # 완료 기준: sudo 실행 시 curl http://neverssl.com 트래픽이 OUT/IN 구분되어
 #            PacketInfo로 나온다. IP·TTL이 Wireshark와 일치한다.
@@ -25,6 +25,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         prog="python3 -m src.main",
         description="Raw Socket 기반 웹 접속 과정·지연 분석기",
     )
+    p.add_argument("--iface", required=True, help="캡처할 인터페이스 (예: wlo1, enp0s3 — ip -br link로 확인)")
     p.add_argument("--target", required=True, help="분석할 도메인 (예: neverssl.com)")
     p.add_argument("--dns-server", required=True, help="실험 조건 라벨: DNS 서버 (예: google)")
     p.add_argument("--network", required=True, help="실험 조건 라벨: 네트워크 (예: school-wifi)")
@@ -36,7 +37,7 @@ def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
 
     # F1 캡처 준비
-    cap_filter = CaptureFilter()
+    cap_filter = CaptureFilter(iface=args.iface)
     builder = SessionBuilder()   # F3 (B)
     tracker = RouteTracker()     # 경로 (D)
 
