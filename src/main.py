@@ -11,10 +11,14 @@
 from __future__ import annotations
 
 import argparse
+import errno
+import signal
+import sys
 
 from .capture import CaptureFilter, capture
 from .decode import decode
 from .latency import measure
+from .models import PacketInfo
 from .output import CsvWriter, print_packet, print_timeline
 from .route import RouteTracker, hop_delays
 from .session import SessionBuilder
@@ -33,8 +37,41 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return p.parse_args(argv)
 
 
-def main(argv: list[str] | None = None) -> None:
+# -----------------------------------------------------------------------------
+# 아직 구현되지 않은 팀원 모듈(NotImplementedError)이 있어도 캡처·decode는 돌도록 하는 장치.
+# NotImplementedError만 잡는다 → 진짜 버그(다른 예외)는 그대로 드러난다.
+# -----------------------------------------------------------------------------
+_disabled: set[str] = set()
+
+
+def _try(stage: str, fn, *args):
+    """fn(*args) 호출. 미구현이면 경고를 한 번만 찍고 그 단계를 끈 뒤 None."""
+    if stage in _disabled:
+        return None
+    try:
+        return fn(*args)
+    except NotImplementedError:
+        _disabled.add(stage)
+        print(f"[main] {stage} 미구현 — 이 단계는 건너뜁니다", file=sys.stderr)
+        return None
+
+
+def _fallback_print(pkt: PacketInfo) -> None:
+    """output.print_packet(D)이 준비되기 전 임시 한 줄 출력 (중간 점검용)."""
+    ports = f" {pkt.src_port}->{pkt.dst_port}" if pkt.src_port is not None else ""
+    flags = f" [{pkt.tcp_flags}]" if pkt.tcp_flags else ""
+    print(f"[{pkt.proto}] {pkt.direction} {pkt.src_ip} -> {pkt.dst_ip}{ports}{flags} "
+          f"ttl={pkt.ttl} len={pkt.payload_len}")
+
+
+def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+
+    # 실험 스크립트처럼 bash에서 '&'로 띄우면 SIGINT가 무시(SIG_IGN) 상태로 물려받아져
+    # timeout -s INT 가 캡처를 끝내지 못한다 → Ctrl+C 처리를 명시적으로 되살린다.
+    # SIGTERM(kill, timeout 기본 신호)도 같은 방식으로 정상 종료 → 결과 출력·CSV 저장.
+    signal.signal(signal.SIGINT, signal.default_int_handler)
+    signal.signal(signal.SIGTERM, signal.default_int_handler)
 
     # F1 캡처 준비
     cap_filter = CaptureFilter(iface=args.iface)
@@ -47,24 +84,46 @@ def main(argv: list[str] | None = None) -> None:
             pkt = decode(captured)
             if pkt is None:
                 continue
-            print_packet(pkt)
-            builder.add(pkt)
-            tracker.add(pkt)
+            _try("print_packet", print_packet, pkt)
+            if "print_packet" in _disabled:
+                _fallback_print(pkt)
+            _try("SessionBuilder.add", builder.add, pkt)
+            _try("RouteTracker.add", tracker.add, pkt)
     except KeyboardInterrupt:
         pass
+    except PermissionError:
+        print("raw socket을 열 권한이 없습니다. sudo로 실행하세요.", file=sys.stderr)
+        return 1
+    except OSError as e:
+        if e.errno in (errno.ENODEV, errno.ENXIO):
+            print(f"인터페이스 '{args.iface}'가 없습니다.\n"
+                  f"  → ip -br link 로 인터페이스 이름을 확인하세요.", file=sys.stderr)
+            return 1
+        raise   # 그 밖의 OSError(예: 출력 파이프 끊김)는 원인을 가리지 않고 그대로 보여 준다
+
+    # 캡처가 끝난 뒤 결과를 정리하는 동안 Ctrl+C가 한 번 더 오면(두 번 누름, timeout 재전송)
+    # CSV 한 줄이 통째로 날아간다 → 이 구간에서는 SIGINT를 무시한다.
+    # (멈춰 버리면 SIGTERM 또는 Ctrl+\ 로 끝낼 수 있고, 실험 스크립트는 timeout -k 로 강제 종료)
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+    signal.signal(signal.SIGTERM, signal.SIG_DFL)
 
     # 경로 붙이기 → F4 지연 측정 + 홉별 지연 → F5 타임라인 출력 · CSV 저장
-    writer = CsvWriter(args.csv, args.dns_server, args.network) if args.csv else None
-    for session in builder.sessions():
+    writer = _try("CsvWriter", CsvWriter, args.csv, args.dns_server, args.network) if args.csv else None
+    sessions = _try("SessionBuilder.sessions", builder.sessions) or []
+    for session in sessions:
         if session.domain != args.target:
             continue
-        session.route_probes = tracker.probes_for(session.server_ip)
-        result = measure(session)
-        result.hops = hop_delays(session.route_probes)
-        print_timeline(session, result)
+        session.route_probes = _try("RouteTracker.probes_for", tracker.probes_for,
+                                    session.server_ip) or []
+        result = _try("measure", measure, session)
+        if result is None:
+            continue
+        result.hops = _try("hop_delays", hop_delays, session.route_probes) or []
+        _try("print_timeline", print_timeline, session, result)
         if writer is not None:
-            writer.write(result)
+            _try("CsvWriter.write", writer.write, result)
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

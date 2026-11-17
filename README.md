@@ -64,6 +64,37 @@ curl -4 http://neverssl.com
 
 > 반복 측정 시 주의: Ubuntu는 DNS 응답을 캐시하므로(systemd-resolved) 매 회 `sudo resolvectl flush-caches` 후 `curl`을 실행한다. 분석기는 `sudo timeout -s INT 60 python3 -m src.main ...`처럼 시간 제한을 걸면 Ctrl+C 없이 끝난다.
 
+### 비교 실험 (반복 실행 스크립트)
+
+분석기를 띄우고 → 트래픽 발생 → 분석기 종료까지를 자동으로 반복한다. 저장소 루트에서 스크립트째 `sudo`로 실행한다.
+
+실험 A — DNS 서버별 (`isp`·`google`·`cloudflare` 각 30회, `domains.txt` 도메인을 번갈아 `dig`):
+
+```bash
+sudo experiments/run_dns_exp.sh wlo1 school-wifi 30
+```
+
+실험 B — 네트워크별 (`curl` 30회, 앞 3회는 `traceroute`도). 네트워크를 바꿀 때마다 라벨만 바꿔 다시 실행:
+
+```bash
+sudo experiments/run_net_exp.sh wlo1 school-wifi 30
+```
+
+| 결과 파일 | 내용 |
+|---|---|
+| `results/exp_a_first.csv` | 실험 A — 도메인별 첫 질의 (서버 캐시가 비어 있을 가능성이 큼) |
+| `results/exp_a.csv` | 실험 A — 같은 도메인의 반복 질의 |
+| `results/exp_b.csv` | 실험 B |
+| `results/raw/*.log` | 분석기 화면 출력 (git에 올리지 않음) |
+
+- CSV는 덮어쓰지 않고 **계속 이어 붙인다.** 실험을 처음부터 다시 하려면 해당 CSV를 먼저 지운다.
+- 통신사 DNS 주소는 `resolvectl`에서 자동으로 찾는다. 못 찾으면 `ISP_DNS=168.126.63.1`처럼 지정한다 (`sudo ISP_DNS=... experiments/run_dns_exp.sh ...`).
+  - 집 공유기나 VirtualBox 환경에서는 자동으로 찾은 주소가 공유기(예: `192.168.0.1`)일 수 있다. 이때 `isp` 결과는 "공유기를 거친 통신사 DNS"이므로, 통신사 DNS를 직접 재려면 `ISP_DNS`로 지정한다.
+- 환경 변수는 **`sudo` 뒤에** 쓴다. `ISP_DNS=... sudo ...`처럼 앞에 쓰면 sudo가 지워 버려 적용되지 않는다.
+- 중간에 `Ctrl+C`로 멈추면 진행 중이던 회차는 CSV에 남기지 않는다.
+- 로그에 `[capture] 경고: 커널에서 버린 프레임`이 보이면 그 회차는 패킷이 빠졌을 수 있다.
+- 그 밖의 설정(대기 시간, traceroute 횟수 등)은 각 스크립트 맨 위 주석 참고 (인자 없이 실행하면 사용법이 나온다).
+
 테스트 실행:
 
 ```bash
@@ -99,7 +130,7 @@ wireshrimp/
 │  └─ plot.py                CSV → 막대 그래프                     C
 ├─ tests/
 │  ├─ samples/               Wireshark에서 뽑은 hex 샘플            각자
-│  ├─ test_link_ip.py                                             A
+│  ├─ test_link_ip.py  test_capture.py                            A
 │  ├─ test_transport.py  test_session.py                          B
 │  ├─ test_dns.py  test_http.py  test_latency.py                  C
 │  └─ test_icmp.py  test_route.py  test_output.py                 D
