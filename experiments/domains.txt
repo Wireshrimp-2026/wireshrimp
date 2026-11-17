@@ -1,3 +1,13 @@
 # 담당자: A — 실험 A용 도메인 목록 (한 줄에 하나, #은 주석)
 # 캐시 영향을 줄이기 위해 여러 도메인을 번갈아 질의한다.
-# TODO: 도메인 목록 확정
+# 국내·해외, 대형·소형 사이트를 섞었다. (A 레코드가 있는 도메인만)
+neverssl.com
+example.com
+naver.com
+daum.net
+kakao.com
+google.com
+wikipedia.org
+github.com
+stackoverflow.com
+python.org
