@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import errno
+import ipaddress
 import signal
 import sys
 
@@ -47,6 +48,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     args.protos = frozenset(names)
 
     args.hosts = [h.strip() for h in args.host.split(",") if h.strip()]
+    for h in args.hosts:
+        # inet_aton은 "8.8.8"도 받아 엉뚱한 주소로 거르고, "10.0.0.300"이면 캡처 시작 때 죽는다
+        # → 여기서 점 4개짜리 IPv4만 받는다.
+        try:
+            ipaddress.IPv4Address(h)
+        except ValueError:
+            p.error(f"--host 값이 IPv4 주소가 아님: {h} (예: 34.223.124.45)")
 
     ports = dict(DEFAULT_PORTS)
     for item in filter(None, (s.strip() for s in args.port.split(","))):
