@@ -1,20 +1,22 @@
 # =============================================================================
-# 담당자  : C
-# 맡은 기능: F2 계층별 해석 — HTTP 파싱
-#            - 요청: Method, URL, Host / 응답: 상태 코드, Reason, Content-Length
-#            - 요청/응답의 첫 줄과 헤더가 있는 패킷에서만 채움 (본문 패킷은 None)
-#            - 데이터가 깨졌으면 ValueError
-# 완료 기준: DNS 질의 도메인·응답 IP, HTTP 메서드·상태 코드가 Wireshark와 일치한다.
-#            dns_ms, tcp_connect_ms, http_first_byte_ms, total_ms가 계산된다.
-#            조건별 평균·최대·표준편차 그래프와 단계 누적 막대 그래프가 나온다.
+# 담당자  : B
+# 맡은 기능: HTTP 해석 (DESIGN 7.5) — 필수
+#            - 요청: Method, Request-URI, Version, 헤더 전체
+#            - 응답: Version, Status Code, Reason Phrase, 헤더 전체
+#            - 헤더 끝(\r\n\r\n) 뒤 본문은 "body: N bytes"만
+#            - 첫 줄이 HTTP가 아닌 세그먼트(본문 이어짐)는 "continuation N bytes"
+# 완료 기준: HTTP 요청줄·상태줄·헤더가 AppInfo로 나온다.
 # =============================================================================
 from __future__ import annotations
 
 from typing import Optional
 
-from ..models import HttpInfo
+from ..models import AppInfo
 
 
-def parse_http(data: bytes) -> Optional[HttpInfo]:
-    """TCP 페이로드 → HttpInfo, 첫 줄이 HTTP 요청/응답이 아니면 None."""
+def parse_http(data: bytes) -> Optional[AppInfo]:
+    """TCP 페이로드 → AppInfo(name="HTTP").
+
+    fields 키: is_request, method, uri, version, status_code, reason, headers(dict), body_len
+    """
     raise NotImplementedError

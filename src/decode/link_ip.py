@@ -1,13 +1,12 @@
 # =============================================================================
 # 담당자  : A
 # 맡은 기능: F2 계층별 해석 — Ethernet(14B), IPv4(20B~) 헤더 파싱
-#            - Ethernet: 출발지·목적지 MAC, EtherType (0x0800 → IPv4)
-#            - IP: 버전, 헤더 길이, TTL, Protocol(6 TCP / 17 UDP / 1 ICMP), 출발지·목적지 IP
+#            - Ethernet: 출발지·목적지 MAC, EtherType, VLAN 태그
+#            - IPv4: Version, IHL, TOS, Total Length, Identification, Flags(DF·MF),
+#              Fragment Offset, TTL, Protocol, Header Checksum(+검증), 출발지·목적지 IP
 #            - 여러 바이트 필드는 big-endian → struct "!" 형식
 #            - 데이터가 짧거나 깨졌으면 ValueError
-# 완료 기준: sudo 실행 시 curl http://neverssl.com 트래픽이 OUT/IN 구분되어
-#            PacketInfo로 나온다. IP·TTL이 Wireshark와 일치한다.
-#            실험 스크립트로 조건별 반복 실행 시 CSV가 쌓인다.
+# 완료 기준: IP 헤더 전 필드와 체크섬 결과가 PacketInfo.ip에 담긴다.
 # =============================================================================
 from __future__ import annotations
 
@@ -29,21 +28,24 @@ def mac_to_str(raw: bytes) -> str:
 
 
 def parse_ethernet(frame: bytes) -> tuple[dict, int, bytes]:
-    """이더넷 프레임 → ({"src_mac", "dst_mac"}, EtherType, 나머지 bytes)."""
+    """이더넷 프레임 → ({"src_mac", "dst_mac", "ethertype", "vlan"}, EtherType, 나머지 bytes)."""
     if len(frame) < ETH_HEADER_LEN:
         raise ValueError(f"ethernet frame too short: {len(frame)} bytes")
 
     dst, src, ethertype = struct.unpack("!6s6sH", frame[:ETH_HEADER_LEN])
     rest = frame[ETH_HEADER_LEN:]
+    vlan = None
 
     # VLAN 태그가 있으면 한 겹 벗겨서 진짜 EtherType을 꺼낸다.
     if ethertype == ETHERTYPE_VLAN:
         if len(rest) < 4:
             raise ValueError("VLAN tag too short")
-        _tci, ethertype = struct.unpack("!HH", rest[:4])
+        tci, ethertype = struct.unpack("!HH", rest[:4])
+        vlan = tci & 0x0FFF
         rest = rest[4:]
 
-    info = {"src_mac": mac_to_str(src), "dst_mac": mac_to_str(dst)}
+    info = {"src_mac": mac_to_str(src), "dst_mac": mac_to_str(dst),
+            "ethertype": ethertype, "vlan": vlan}
     return info, ethertype, rest
 
 
@@ -86,14 +88,28 @@ def parse_ip(data: bytes) -> tuple[dict, bytes]:
         "total_length": total_length,
         "id": ident,
         "flags": flags_frag >> 13,                 # bit0 reserved, bit1 DF, bit2 MF
-        "dont_fragment": bool(flags_frag & 0x4000),
-        "more_fragments": bool(flags_frag & 0x2000),
+        "df": bool(flags_frag & 0x4000),
+        "mf": bool(flags_frag & 0x2000),
+        "dont_fragment": bool(flags_frag & 0x4000),   # df와 같음 (기존 이름)
+        "more_fragments": bool(flags_frag & 0x2000),  # mf와 같음 (기존 이름)
         "frag_offset": (flags_frag & 0x1FFF) * 8,  # 바이트 단위
         "ttl": ttl,
         "protocol": protocol,
         "proto_name": IP_PROTO_NAMES.get(protocol, "OTHER"),
         "checksum": checksum,
+        # 송신(OUT) 패킷은 NIC 오프로드로 체크섬이 비어 있을 수 있다 → 출력에서 방향과 함께 판단
+        "checksum_ok": ip_checksum(data[:header_len]) == 0,
         "src_ip": socket.inet_ntoa(src),
         "dst_ip": socket.inet_ntoa(dst),
     }
     return info, payload
+
+
+def ip_checksum(header: bytes) -> int:
+    """16비트 1의 보수 합. 체크섬 필드를 포함한 헤더 전체를 넣으면 올바를 때 0."""
+    if len(header) % 2:
+        header += b"\0"
+    total = sum(struct.unpack(f"!{len(header) // 2}H", header))
+    while total >> 16:
+        total = (total & 0xFFFF) + (total >> 16)
+    return ~total & 0xFFFF

@@ -1,1 +1,1 @@
-# Raw Socket 기반 웹 접속 과정·지연 분석기 (wireshrimp)
+# Raw Socket 기반 패킷 캡처·분석기 (wireshrimp)

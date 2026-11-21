@@ -1,36 +1,39 @@
 # =============================================================================
-# 담당자  : D
-# 맡은 기능: F5 출력·저장
-#            - 실시간 한 줄 출력: "[DNS] OUT 10.0.2.15 -> 8.8.8.8 query A neverssl.com id=0x1a2b"
-#            - 접속 1회 요약 타임라인 ([DNS] → [ROUTE] → [TCP] → [HTTP] → [TCP] 종료)
-#            - CSV 기록 (models.CSV_COLUMNS 순서, None은 빈 칸, hop_delays는 "2.1;*;14.8")
-# 완료 기준: ICMP Type·Code·원본 목적지 IP·포트가 Wireshark와 일치한다. traceroute 프로브와
-#            ICMP 응답이 짝지어져 홉별 지연이 계산된다. 설계안 출력 예시 모양의 타임라인이
-#            찍히고 CSV가 2.6 형식으로 쌓인다.
+# 담당자  : A
+# 맡은 기능: F4 화면·로그 출력 (DESIGN 4장)
+#            - 4.1 패킷별 출력: 번호·시각·방향·주소 한 줄 + [ETH] [IP] [TCP]/[UDP]/[ICMP] + 응용(app.lines)
+#              응용을 판별 못 한 데이터는 [DATA] N bytes + 앞 32바이트 hex, hex=True면 원본 덤프
+#              IP·UDP 체크섬: ok / bad, OUT이고 bad면 offload, UDP checksum_ok가 None이면 unused
+#            - 4.2 TCP 연결 요약 (연결설정 / 데이터 / 연결해제, RST, 캡처 전에 열린 연결)
+#            - 4.3 traceroute 홉 표
+#            - open_log()가 불렸으면 화면과 같은 내용을 파일에도 쓴다
+# 완료 기준: 4.1·4.2·4.3 형식이 모두 찍히고 로그 파일에도 같은 내용이 남는다.
 # =============================================================================
 from __future__ import annotations
 
-from .models import LatencyResult, PacketInfo, Session
+from .models import Connection, Hop, PacketInfo
 
 
-def print_packet(pkt: PacketInfo) -> None:
-    """패킷 1건을 실시간 한 줄로 출력 ([DNS] OUT ... 형식)."""
+def open_log(path: str) -> None:
+    """이후 출력을 path 파일에도 기록한다."""
     raise NotImplementedError
 
 
-def print_timeline(session: Session, result: LatencyResult) -> None:
-    """접속 1회의 요약 타임라인을 출력."""
+def close_log() -> None:
+    """로그 파일을 닫는다 (열려 있지 않으면 아무것도 안 함)."""
     raise NotImplementedError
 
 
-class CsvWriter:
-    """LatencyResult를 CSV 한 줄씩 쌓는다."""
+def print_packet(pkt: PacketInfo, hex: bool = False) -> None:
+    """패킷 1건을 4.1 형식으로 출력."""
+    raise NotImplementedError
 
-    def __init__(self, path: str, dns_server: str, network: str) -> None:
-        self.path = path
-        self.dns_server = dns_server   # 실험 조건 라벨 (예: google)
-        self.network = network         # 실험 조건 라벨 (예: school-wifi)
 
-    def write(self, result: LatencyResult) -> None:
-        """LatencyResult → CSV 한 줄 추가 (파일이 없으면 헤더부터)."""
-        raise NotImplementedError
+def print_connection(conn: Connection) -> None:
+    """TCP 연결 1개를 4.2 형식으로 출력."""
+    raise NotImplementedError
+
+
+def print_route(dst: str, hops: list[Hop]) -> None:
+    """목적지 1곳의 traceroute 결과를 4.3 형식 홉 표로 출력."""
+    raise NotImplementedError

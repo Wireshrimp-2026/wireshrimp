@@ -1,18 +1,25 @@
 # =============================================================================
-# 담당자  : C
-# 맡은 기능: F2 계층별 해석 — DNS 파싱
-#            - Transaction ID, Flags(QR 비트), 질의 도메인·Type, 응답 IP·TTL (A 레코드)
-#            - 이름 압축 포인터 처리
-#            - 데이터가 짧거나 깨졌으면 ValueError
-# 완료 기준: DNS 질의 도메인·응답 IP, HTTP 메서드·상태 코드가 Wireshark와 일치한다.
-#            dns_ms, tcp_connect_ms, http_first_byte_ms, total_ms가 계산된다.
-#            조건별 평균·최대·표준편차 그래프와 단계 누적 막대 그래프가 나온다.
+# 담당자  : B
+# 맡은 기능: DNS 해석 (DESIGN 7.4) — 필수
+#            - 헤더: ID, Flags(QR, Opcode, AA, TC, RD, RA, Z, RCODE), QD/AN/NS/AR COUNT
+#            - Question: 이름, Type, Class
+#            - Answer/Authority/Additional: 이름, Type, Class, TTL, RDLENGTH,
+#              RDATA (A, AAAA, CNAME, NS, MX, PTR, TXT, SOA, 그 밖은 hex)
+#            - 이름 압축 포인터(0xC0) 처리, 포인터 무한 반복 방지
+#            - over_tcp면 앞 2바이트 길이를 이 함수가 뗀다 (dig +tcp)
+# 완료 기준: DNS 헤더·플래그·질의·응답(A, AAAA, CNAME, MX)이 UDP·TCP 모두 AppInfo로 나온다.
 # =============================================================================
 from __future__ import annotations
 
-from ..models import DnsInfo
+from ..models import AppInfo
 
 
-def parse_dns(data: bytes) -> DnsInfo:
-    """UDP 페이로드(DNS 메시지) → DnsInfo."""
+def parse_dns(data: bytes, over_tcp: bool = False) -> AppInfo:
+    """DNS 메시지 → AppInfo(name="DNS").
+
+    summary 예: "Standard query 0x1a2b A neverssl.com"
+               "Standard query response 0x1a2b A 34.223.124.45"
+    fields 키: txid, is_response, opcode, rcode, flags(dict), questions(list), answers(list),
+              authority(list), additional(list)
+    """
     raise NotImplementedError

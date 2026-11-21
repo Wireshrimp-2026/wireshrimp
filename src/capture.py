@@ -1,16 +1,12 @@
 # =============================================================================
-# 담당자  : A
 # 맡은 기능: F1 캡처
 #            - AF_PACKET raw socket (root). protocol 0으로 만든 뒤 bind((iface, ETH_P_ALL))로
 #              filter.iface 인터페이스 하나에서만 모든 프레임 수신
 #              (tailscale0 같은 tun 장치는 이더넷 헤더가 없어 parse_ethernet이 깨짐, lo는 패킷이 두 번 보임)
 #            - recvfrom() 주소 정보의 pkttype == PACKET_OUTGOING(4) → "OUT", 그 외 → "IN"
 #            - 받은 시각: 커널 수신 시각(SIOCGSTAMP), 실패하면 time.time()
-#            - 대상 서버 IP, 포트(53, 80), ICMP, traceroute 포트만 남기는 필터
+#            - --proto 로 고른 프로토콜의 포트, ICMP·traceroute 프로브만 남기는 필터
 #            - 종료 시 커널이 버린 프레임 수 경고 (PACKET_STATISTICS)
-# 완료 기준: sudo 실행 시 curl http://neverssl.com 트래픽이 OUT/IN 구분되어
-#            PacketInfo로 나온다. IP·TTL이 Wireshark와 일치한다.
-#            실험 스크립트로 조건별 반복 실행 시 CSV가 쌓인다.
 # =============================================================================
 from __future__ import annotations
 
@@ -21,7 +17,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Iterator, Optional
 
-from .models import DIRECTION_IN, DIRECTION_OUT, Captured
+from .models import (DEFAULT_PORTS, DIRECTION_IN, DIRECTION_OUT, PROTOCOLS,
+                     TRACEROUTE_PORTS, Captured)
 
 ETH_P_ALL = 0x0003
 PACKET_OUTGOING = 4
@@ -41,11 +38,15 @@ _PROTO_ICMP, _PROTO_TCP, _PROTO_UDP = 1, 6, 17
 @dataclass
 class CaptureFilter:
     """캡처할 트래픽 조건."""
-    iface: str = ""                                       # 캡처할 인터페이스 (예: wlo1, enp0s3) — ip -br link로 확인
-    server_ips: list[str] = field(default_factory=list)   # 대상 서버 IP 목록 (비어 있으면 IP로 거르지 않음)
-    ports: tuple[int, ...] = (53, 80)                      # 남길 TCP/UDP 포트
-    allow_icmp: bool = True                                # ICMP 허용 여부
-    traceroute_ports: tuple[int, int] = (33434, 33534)     # traceroute UDP 프로브 포트 범위 (이상, 이하)
+    iface: str = ""                                                    # 캡처할 인터페이스 (ip -br link)
+    protos: frozenset[str] = frozenset(PROTOCOLS)                      # 분석할 프로토콜
+    ports: dict[str, tuple[int, ...]] = field(default_factory=lambda: dict(DEFAULT_PORTS))
+    hosts: list[str] = field(default_factory=list)                     # 이 IP와 주고받은 패킷만 (DNS는 예외)
+    traceroute_ports: tuple[int, int] = TRACEROUTE_PORTS               # (이상, 이하)
+
+    def wanted_ports(self) -> set[int]:
+        """고른 프로토콜의 포트 합집합."""
+        return {p for name in self.protos for p in self.ports.get(name, ())}
 
 
 def capture(filter: CaptureFilter) -> Iterator[Captured]:
@@ -69,19 +70,22 @@ def capture(filter: CaptureFilter) -> Iterator[Captured]:
         # 'ioctl을 부른 순간'이 대신 돌아오므로, 첫 패킷이 오기 전에 미리 한 번 불러 켜 둔다.
         _kernel_timestamp(sock)
 
-        server_ips = {socket.inet_aton(ip) for ip in filter.server_ips}
+        hosts = {socket.inet_aton(ip) for ip in filter.hosts}
+        wanted = filter.wanted_ports()
+        no = 0
         while True:
             frame, addr = sock.recvfrom(RECV_BUF)
             if filter.iface and addr[0] != filter.iface:
                 continue   # 만일을 위한 이중 확인
-            if not frame_matches(frame, filter, server_ips):
+            if not frame_matches(frame, filter, hosts, wanted):
                 continue
             # 시각은 커널이 기록해 둔 값이라 필터를 먼저 돌려도 정확도가 떨어지지 않는다.
             # (버릴 프레임에 ioctl 시스템 호출을 낭비하지 않으려고 필터 뒤에 둠)
             ts = _kernel_timestamp(sock) or time.time()
             # addr = (ifname, proto, pkttype, hatype, hwaddr)
             direction = DIRECTION_OUT if addr[2] == PACKET_OUTGOING else DIRECTION_IN
-            yield Captured(ts=ts, direction=direction, frame=frame)
+            no += 1
+            yield Captured(no=no, ts=ts, direction=direction, frame=frame)
     finally:
         _report_drops(sock)
         sock.close()
@@ -132,19 +136,22 @@ def _kernel_timestamp(sock: socket.socket) -> Optional[float]:
 
 
 def frame_matches(frame: bytes, filter: CaptureFilter,
-                  server_ips: Optional[set[bytes]] = None) -> bool:
+                  hosts: Optional[set[bytes]] = None,
+                  wanted: Optional[set[int]] = None) -> bool:
     """decode() 전에 바이트 오프셋만 보고 빠르게 거르는 필터.
 
     남기는 것:
-      - ICMP (allow_icmp일 때)                         → traceroute 응답
-      - UDP 목적지 포트가 traceroute 범위 안           → traceroute 프로브
-      - TCP/UDP 포트가 ports 안
-          · 53(DNS)은 서버 IP와 상관없이 항상 남김 (DNS 서버 ≠ 대상 서버)
-          · 그 밖의 포트는 server_ips가 있으면 상대 IP가 목록에 있을 때만
+      - ICMP, traceroute 범위의 UDP 프로브              ("traceroute"를 골랐을 때)
+      - DNS(53)                                         ("dns"를 골랐을 때, hosts와 상관없이)
+      - 고른 프로토콜의 포트를 쓰는 TCP/UDP
+      - 모든 TCP/UDP                                    ("bittorrent"를 골랐을 때 — 피어·DHT 포트가 정해져 있지 않음)
+    hosts가 있으면 DNS를 뺀 나머지는 상대 IP가 hosts에 있을 때만 남긴다.
     IPv4가 아니거나 너무 짧으면 버린다 (decode도 어차피 None을 돌려줌).
     """
-    if server_ips is None:
-        server_ips = {socket.inet_aton(ip) for ip in filter.server_ips}
+    if hosts is None:
+        hosts = {socket.inet_aton(ip) for ip in filter.hosts}
+    if wanted is None:
+        wanted = filter.wanted_ports()
 
     if len(frame) < 14:
         return False
@@ -164,14 +171,16 @@ def frame_matches(frame: bytes, filter: CaptureFilter,
     frag_offset = struct.unpack_from("!H", frame, off + 6)[0] & 0x1FFF
     src_ip = frame[off + 12:off + 16]
     dst_ip = frame[off + 16:off + 20]
+    host_ok = not hosts or src_ip in hosts or dst_ip in hosts
+    traceroute = "traceroute" in filter.protos
 
     if proto == _PROTO_ICMP:
-        return filter.allow_icmp
+        return traceroute
     if proto not in (_PROTO_TCP, _PROTO_UDP):
         return False
     if frag_offset != 0:
-        # 두 번째 이후 조각에는 포트가 없다 → 서버 IP로만 판단
-        return bool(server_ips) and (src_ip in server_ips or dst_ip in server_ips)
+        # 두 번째 이후 조각에는 포트가 없다 → IP로만 판단
+        return bool(hosts) and host_ok
 
     l4 = off + ihl
     if len(frame) < l4 + 4:
@@ -179,12 +188,12 @@ def frame_matches(frame: bytes, filter: CaptureFilter,
     sport, dport = struct.unpack_from("!HH", frame, l4)
 
     lo, hi = filter.traceroute_ports
-    if proto == _PROTO_UDP and lo <= dport <= hi:
+    if proto == _PROTO_UDP and traceroute and lo <= dport <= hi:
+        return host_ok
+    if "dns" in filter.protos and 53 in (sport, dport):
         return True
-    if sport not in filter.ports and dport not in filter.ports:
+    if "bittorrent" in filter.protos:
+        return host_ok
+    if sport not in wanted and dport not in wanted:
         return False
-    if 53 in (sport, dport):
-        return True
-    if not server_ips:
-        return True
-    return src_ip in server_ips or dst_ip in server_ips
+    return host_ok

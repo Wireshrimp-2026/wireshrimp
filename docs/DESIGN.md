@@ -28,7 +28,7 @@
 | 송신·수신 모두 캡처 | `recvfrom()`의 pkttype으로 OUT/IN 구분 | `capture.py` | 출력에 OUT·IN 둘 다 |
 | IP 헤더 | IPv4 헤더 전 필드 + 체크섬 검증 | `decode/link_ip.py` | Wireshark 비교 |
 | TCP 헤더 | 전 필드 + 옵션(MSS, WS, SACK, TS) + 상대 Seq/Ack | `decode/transport.py` | Wireshark 비교 |
-| UDP 헤더 | 전 필드 | `decode/transport.py` | Wireshark 비교 |
+| UDP 헤더 | 전 필드 + 체크섬 검증 (의사 헤더 포함) | `decode/transport.py` | Wireshark 비교 |
 | TCP 연결설정·전송·해제 | 연결별 상태 추적, 3-way / 데이터 / 4-way 요약 | `tcp_track.py` | 연결 요약 출력 |
 | **HTTP (필수)** | 요청줄·상태줄·헤더 | `decode/app_http.py` | `curl` |
 | **DNS (필수)** | 헤더·플래그·질의·응답 레코드 (UDP·TCP) | `decode/app_dns.py` | `dig` |
@@ -82,7 +82,7 @@ sudo python3 -m src.main --iface enp0s3 --proto http,dns
 | 옵션 | 필수 | 설명 |
 |---|---|---|
 | `--iface` | O | 캡처할 인터페이스 (`ip -br link`로 확인) |
-| `--proto` | | 분석할 프로토콜, 쉼표 구분. `http,dns,smtp,pop3,imap,traceroute,bittorrent,all` (기본 `all`) |
+| `--proto` | | 분석할 프로토콜, 쉼표 구분. `http,dns,smtp,pop3,imap,traceroute,bittorrent,tls,all` (기본 `all`) |
 | `--host` | | 이 IP와 주고받은 패킷만 (DNS 서버 등은 별도로 항상 허용) |
 | `--port` | | 포트 재지정. 예: `smtp=2525,pop3=2110,imap=2143` |
 | `--hex` | | 패킷마다 원본 바이트 hex 덤프도 출력 |
@@ -179,7 +179,7 @@ sudo python3 -m src.main --iface enp0s3 --proto http,dns
 | `ip` | dict \| None | `link_ip.py` | `version`, `header_len`, `tos`, `total_length`, `id`, `df`, `mf`, `frag_offset`, `ttl`, `protocol`, `checksum`, `checksum_ok`, `src_ip`, `dst_ip` |
 | `proto` | str | `link_ip.py` | `"TCP"` / `"UDP"` / `"ICMP"` / `"OTHER"` |
 | `tcp` | dict \| None | `transport.py` | `src_port`, `dst_port`, `seq`, `ack`, `header_len`, `flags`(문자열), `flag_bits`(int), `window`, `checksum`, `urgent`, `options`(list[str]) |
-| `udp` | dict \| None | `transport.py` | `src_port`, `dst_port`, `length`, `checksum` |
+| `udp` | dict \| None | `transport.py` | `src_port`, `dst_port`, `length`, `checksum`, `checksum_ok` |
 | `icmp` | dict \| None | `icmp.py` | `type`, `code`, `type_name`, `checksum`, (Echo) `id`, `seq`, (오류 메시지) `orig_src_ip`, `orig_dst_ip`, `orig_proto`, `orig_src_port`, `orig_dst_port`, `orig_ttl` |
 | `payload` | bytes | `transport.py` | 전송 계층 헤더를 뗀 데이터 |
 | `app` | AppInfo \| None | `app_*.py` | 응용 계층 해석 결과 |
@@ -225,9 +225,9 @@ sudo python3 -m src.main --iface enp0s3 --proto http,dns
 | `capture.py` | `CaptureFilter` | 인터페이스, 프로토콜 목록, 포트 표, 대상 IP |
 | `decode/link_ip.py` | `parse_ethernet(frame)` | bytes → (dict, EtherType, 나머지) |
 | `decode/link_ip.py` | `parse_ip(data)` | bytes → (dict, 나머지) |
-| `decode/transport.py` | `parse_tcp(data)` / `parse_udp(data)` | bytes → (dict, 페이로드) |
+| `decode/transport.py` | `parse_tcp(data)` / `parse_udp(data, src_ip, dst_ip)` | bytes → (dict, 페이로드). UDP는 IP 주소로 의사 헤더를 만들어 체크섬을 검증 |
 | `decode/icmp.py` | `parse_icmp(data)` | bytes → dict (오류 메시지면 안쪽 IP·UDP 포함) |
-| `decode/app_select.py` | `parse_app(conn_key, proto, src_port, dst_port, from_client, payload, ports)` | 응용 계층 진입점. 3.1 표로 프로토콜을 판별해 아래 파서 중 하나를 부름 → AppInfo 또는 None. `decode()`는 이 함수 하나만 부른다 |
+| `decode/app_select.py` | `parse_app(conn_key, proto, src_port, dst_port, payload, ports)` | 응용 계층 진입점. 3.1 표로 프로토콜을 판별해 아래 파서 중 하나를 부름 → AppInfo 또는 None. `conn_key`는 `models.canonical_key()`로 만든 방향 무관 키. 메일 파서의 `from_client`는 이 함수가 포트로 정한다 |
 | `decode/app_dns.py` | `parse_dns(data, over_tcp)` | bytes → AppInfo. `over_tcp`면 앞 2바이트 길이를 이 함수가 뗌 |
 | `decode/app_http.py` | `parse_http(data)` | bytes → AppInfo 또는 None (HTTP 첫 줄이 아님) |
 | `decode/app_bt.py` | `parse_bt_peer(conn_key, data)` / `parse_bt_tracker(data)` / `parse_bt_dht(data)` | bytes → AppInfo 또는 None. 트래커는 HTTP 파서를 거치지 않고 직접 해석, 피어 메시지 경계는 이 파일 안에서 `conn_key`별로 기억 |
@@ -236,8 +236,8 @@ sudo python3 -m src.main --iface enp0s3 --proto http,dns
 | `decode/__init__.py` | `decode(captured, ports)` | Captured → PacketInfo 또는 None. Ethernet → IP → TCP/UDP/ICMP를 차례로 호출하고, 응용 계층은 `parse_app()`에 넘김 |
 | `tcp_track.py` | `TcpTracker.add(pkt)` → 끝난 `Connection` 또는 None / `.remaining()` | PacketInfo를 하나씩 받아 상대 Seq 채우고 연결 상태 갱신 |
 | `route.py` | `RouteTracker.add(pkt)` / `.hops()` | 프로브 ↔ ICMP 짝 → 목적지별 `[Hop]` |
-| `output.py` | `print_packet(pkt, hex=False)` / `print_connection(conn)` / `print_route(dst, hops)` | 4장 형식으로 출력 (로그 파일 동시 기록) |
-| `pcap.py` | `PcapWriter(path).write(captured)` | pcap 파일 저장 (전역 헤더 24B + 레코드 헤더 16B, linktype 1) |
+| `output.py` | `open_log(path)` / `close_log()` / `print_packet(pkt, hex=False)` / `print_connection(conn)` / `print_route(dst, hops)` | 4장 형식으로 출력 (`open_log` 후에는 로그 파일 동시 기록) |
+| `pcap.py` | `PcapWriter(path).write(captured)` / `.close()` | pcap 파일 저장 (전역 헤더 24B + 레코드 헤더 16B, linktype 1) |
 
 **연결 순서 (`main.py`)**
 ```
@@ -268,6 +268,9 @@ for captured in capture(filter):
 ### 7.2 TCP·UDP 헤더
 - TCP: Source Port, Destination Port, **Sequence No, Acknowledgement No**, Data Offset, Flags 9비트, Window, Checksum, Urgent Pointer, Options(MSS, Window Scale, SACK Permitted, SACK, Timestamps, NOP, EOL)
 - UDP: Source Port, Destination Port, Length, Checksum
+- **UDP 체크섬은 반드시 검증한다**: 의사 헤더(출발지 IP 4B, 목적지 IP 4B, 0 1B, Protocol 17 1B, UDP Length 2B) + UDP 헤더(체크섬 칸은 그대로) + 데이터를 16비트 1의 보수로 더해 0이면 `checksum_ok=True`, 아니면 `False`
+  - 체크섬 값이 0이면 송신 측이 체크섬을 쓰지 않은 것(IPv4에서 허용) → `checksum_ok=None`
+  - 송신(OUT) 패킷은 NIC 오프로드로 틀린 값일 수 있음 → 출력에서 `offload`로 표시
 
 ### 7.3 TCP 연결 추적 (`tcp_track.py`)
 | 단계 | 판단 |
@@ -411,7 +414,7 @@ wireshrimp/
 
 | 담당 | 맡는 부분 | 파일 (본인만 수정) |
 |---|---|---|
-| **A** — 패킷·연결·출력 | Ethernet·IPv4 헤더(체크섬 검증), TCP 헤더(옵션 포함)·UDP 헤더, TCP 연결 추적(연결설정·데이터·해제, 상대 Seq/Ack, 재전송, RST), `decode()` 합치기, 실행 흐름·옵션, 화면·로그 출력(4장 형식 전부), pcap 저장 | `decode/link_ip.py` `decode/transport.py` `decode/__init__.py` `tcp_track.py` `main.py` `models.py` `output.py` `pcap.py` |
+| **A** — 패킷·연결·출력 | Ethernet·IPv4 헤더(체크섬 검증), TCP 헤더(옵션 포함)·UDP 헤더(체크섬 검증), TCP 연결 추적(연결설정·데이터·해제, 상대 Seq/Ack, 재전송, RST), `decode()` 합치기, 실행 흐름·옵션, 화면·로그 출력(4장 형식 전부), pcap 저장 | `decode/link_ip.py` `decode/transport.py` `decode/__init__.py` `tcp_track.py` `main.py` `models.py` `output.py` `pcap.py` |
 | **B** — 응용 프로토콜·traceroute | 응용 프로토콜 판별(`parse_app()`), HTTP 요청·응답, DNS(헤더·플래그·레코드, 이름 압축, TCP DNS 길이 처리), SMTP·POP3·IMAP(명령·응답, STARTTLS 이후 중단, 비밀번호 가림), bencode 해석기, BitTorrent 트래커·피어 handshake·메시지·DHT, TLS 레코드 헤더, ICMP(Echo, 오류 메시지 안쪽 IP·UDP), traceroute 프로브 짝 맞추기·홉 표(UDP·ICMP 방식) | `decode/app_select.py` `decode/app_http.py` `decode/app_dns.py` `decode/app_mail.py` `decode/app_bt.py` `decode/app_tls.py` `decode/icmp.py` `route.py` |
 
 **이렇게 나눈 이유**
@@ -434,7 +437,7 @@ wireshrimp/
 
 ### 10.1 완료 기준
 
-- [ ] **A**: IP·TCP(옵션 포함)·UDP 헤더 전 필드와 IP 체크섬 결과, 상대 Seq/Ack가 출력된다. `curl` 1회가 4.2 형식 연결 요약 1개로 나온다 (연결설정 3개, 데이터, 연결해제). 4.1·4.2·4.3 형식이 모두 찍히고 로그 파일에도 같은 내용이 남는다. 캡처한 프레임이 pcap 형식으로 저장된다.
+- [ ] **A**: IP·TCP(옵션 포함)·UDP 헤더 전 필드와 IP·UDP 체크섬 검증 결과, 상대 Seq/Ack가 출력된다. `curl` 1회가 4.2 형식 연결 요약 1개로 나온다 (연결설정 3개, 데이터, 연결해제). 4.1·4.2·4.3 형식이 모두 찍히고 로그 파일에도 같은 내용이 남는다. 캡처한 프레임이 pcap 형식으로 저장된다.
 - [ ] **B**: `parse_app()`이 3.1 표대로 프로토콜을 고른다. HTTP 요청줄·상태줄·헤더가 출력된다. DNS 헤더·플래그·질의·응답(A, AAAA, CNAME, MX)이 UDP·TCP 모두 출력된다. SMTP·POP3·IMAP 명령·응답이 출력되고 비밀번호가 가려진다. BitTorrent handshake의 info_hash·peer_id, 트래커 요청 인자와 응답의 peers 목록, 피어 메시지 종류, DHT 질의 종류가 출력된다. ICMP Type·Code와 안쪽 원본 IP·포트가 나오고, traceroute(UDP·ICMP 방식)가 홉 목록으로 나온다.
 
 ### 10.2 공통 약속
@@ -452,7 +455,24 @@ wireshrimp/
 | 브랜치 | A `feat/packet` `feat/output` · B `feat/app` `feat/route` |
 | PR 필요 | 새 기능, 남의 파일, `models.py`, `main.py` → 다른 한 명이 확인 후 merge |
 | 바로 push | 내 파일의 작은 수정, 오타 (push 전 `git pull`) |
-| 커밋 메시지 | `[F3] FIN 교환 추적 추가`, `[DNS] MX 레코드 해석` 처럼 앞에 기능·프로토콜 |
+| 커밋 메시지 | `[F3] FIN 교환 추적 추가`, `[DNS] MX 레코드 해석` 처럼 앞에 기능·프로토콜, 끝에 issue 번호 `(#12)` |
+
+### 11.1 Issue 규칙 — 역할별로 만든다
+
+- **작업을 시작하기 전에 자기 역할의 issue를 먼저 만든다.** issue 하나 = 작업 하나.
+- 제목 앞에 역할을 붙인다: `[A] UDP 체크섬 검증`, `[B] DNS 이름 압축 포인터 처리`
+- 라벨: `role:A` 또는 `role:B` (+ 필요하면 `bug`). Assignee는 그 역할을 맡은 사람.
+- 본문에 적을 것: 할 일, 고칠 파일, 완료 기준 (10.1에서 해당 부분)
+- PR 본문에 `Closes #번호`를 적어 merge되면 issue가 자동으로 닫히게 한다.
+- **다른 역할의 파일에 고칠 점이 생기면 직접 고치지 않고**, 그 역할 라벨로 issue를 만들어 넘긴다.
+- `models.py`나 함수 약속(6장)을 바꿔야 하면 `role:A`·`role:B` 둘 다 붙인 issue로 먼저 합의한다.
+
+처음 만들 issue (역할별):
+
+| 역할 | issue |
+|---|---|
+| A | `[A] TCP·UDP 헤더 파싱 (UDP 체크섬 검증 포함)` · `[A] TCP 연결 추적` · `[A] 패킷·연결·홉 표 출력과 로그` · `[A] pcap 저장` |
+| B | `[B] 응용 프로토콜 판별 parse_app` · `[B] HTTP` · `[B] DNS` · `[B] SMTP·POP3·IMAP` · `[B] BitTorrent` · `[B] TLS 레코드 헤더` · `[B] ICMP·traceroute` |
 
 ---
 
