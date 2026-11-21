@@ -17,13 +17,15 @@
 Captured    PacketInfo          Connection · Hop
 ```
 
-출력 예시 (목표):
+출력 예시:
 
 ```
-#12  14:03:11.123456  OUT  TCP  10.0.2.15:51234 -> 34.223.124.45:80  len=132
-  [IP  ] ver=4 hlen=20 total=132 id=0x1c2d flags=DF ttl=64 proto=6(TCP) cksum=0x8a1f(ok)
+#12   14:03:11.123456  OUT  TCP  10.0.2.15:51234 -> 34.223.124.45:80  len=132
+  [ETH ] dst=52:54:00:12:35:02 src=08:00:27:aa:bb:cc type=0x0800(IPv4)
+  [IP  ] ver=4 hlen=20 tos=0x00 total=132 id=0x1c2d flags=DF frag=0 ttl=64 proto=6(TCP) cksum=0x8a1f(ok)
          src=10.0.2.15 dst=34.223.124.45
-  [TCP ] sport=51234 dport=80 seq=1 ack=1 hlen=32 flags=ACK,PSH win=502
+  [TCP ] sport=51234 dport=80 seq=1 ack=1 (raw seq=3021457731 ack=1874020011)
+         hlen=32 flags=ACK,PSH win=502 cksum=0x4c2e urg=0 opts=[NOP, NOP, TS val=… ecr=…]
   [HTTP] GET / HTTP/1.1
          Host: neverssl.com
 ```
@@ -87,7 +89,7 @@ curl -4 http://neverssl.com
 python3 -m unittest discover -s tests -t .
 ```
 
-> 지금은 뼈대 단계입니다. 아직 구현되지 않은 모듈은 실행 시 `미구현 — 이 단계는 건너뜁니다`로 한 번 알리고 넘어가며, 출력은 임시 한 줄 형식으로 나옵니다.
+> 진행 상황: A 담당(헤더 해석·연결 추적·출력·pcap)은 구현되어 있고, B 담당(응용 프로토콜·ICMP·traceroute)은 아직 뼈대입니다. 구현되지 않은 모듈은 실행 시 `미구현`으로 한 번 알리고 넘어가며, 그동안 응용 계층 데이터는 `[DATA]`로 나옵니다.
 
 ## 폴더 구조
 
@@ -130,7 +132,7 @@ wireshrimp/
 - 자기 파일만 고친다. 서로 맞추는 것은 [`src/models.py`](src/models.py)의 데이터 형식과 DESIGN.md 6장의 함수 약속뿐이다.
 - 공개 함수의 이름·입력·출력은 바꾸지 않는다. 도우미 함수는 자유롭게 추가.
 - 파서는 데이터가 짧거나 깨졌으면 `ValueError`. 알 수 없는 값은 0이 아니라 `None`.
-- **UDP 체크섬은 반드시 검증한다** — 의사 헤더(출발지·목적지 IP, Protocol 17, UDP Length) 포함, 값이 0이면 "안 씀"(`None`). ([DESIGN.md 7.2](docs/DESIGN.md#72-tcpudp-헤더))
+- **UDP 체크섬은 반드시 검증한다** — 의사 헤더(출발지·목적지 IP, Protocol 17, UDP Length) 포함, 값이 0이면 "안 씀"(`None`), 랜카드가 채울 미완성 값이면 `offload`로 표시. ([DESIGN.md 7.2](docs/DESIGN.md#72-tcpudp-헤더))
 
 완료 기준은 [DESIGN.md 10.1](docs/DESIGN.md#101-완료-기준) 참고.
 
