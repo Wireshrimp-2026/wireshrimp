@@ -91,7 +91,8 @@ class PacketInfo:
     tcp: Optional[dict] = None          # src_port, dst_port, seq, ack, header_len, flags,
                                         # flag_bits, window, checksum, urgent, options
     udp: Optional[dict] = None          # src_port, dst_port, length, checksum,
-                                        # checksum_ok (True / False / None=체크섬 안 씀)
+                                        # checksum_ok (True / False / None=체크섬 안 씀 또는
+                                        # 잘려서 검증 불가), checksum_partial (offload 미완성 값)
     icmp: Optional[dict] = None         # type, code, type_name, checksum, (Echo) id, seq,
                                         # (오류) orig_src_ip, orig_dst_ip, orig_proto,
                                         # orig_src_port, orig_dst_port, orig_ttl
@@ -99,6 +100,7 @@ class PacketInfo:
     app: Optional[AppInfo] = None       # 응용 계층 해석 결과
     rel_seq: Optional[int] = None       # F3에서 채움 (연결 시작 기준 상대값)
     rel_ack: Optional[int] = None
+    frame: bytes = field(default=b"", repr=False)   # 원본 프레임 (--hex 덤프용)
 
     @property
     def src_ip(self) -> str:
@@ -133,4 +135,4 @@ class Connection:
     data_bytes: dict = field(default_factory=lambda: {DIRECTION_OUT: 0, DIRECTION_IN: 0})
     retransmissions: int = 0
     teardown: list[PacketInfo] = field(default_factory=list)    # FIN 교환 + 마지막 ACK, 또는 RST
-    state: str = "SYN_SENT"            # SYN_SENT → ESTABLISHED → FIN_WAIT → CLOSED / RESET
+    state: str = "SYN_SENT"            # SYN_SENT → SYN_RCVD → ESTABLISHED → FIN_WAIT → CLOSED / RESET
