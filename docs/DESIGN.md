@@ -119,7 +119,7 @@ sudo python3 -m src.main --iface enp0s3 --proto http,dns
   [IP  ] ver=4 hlen=20 tos=0x00 total=132 id=0x1c2d flags=DF frag=0 ttl=64 proto=6(TCP) cksum=0x8a1f(ok)
          src=10.0.2.15 dst=34.223.124.45
   [TCP ] sport=51234 dport=80 seq=1 ack=1 (raw seq=3021457731 ack=1874020011)
-         hlen=32 flags=PSH,ACK win=502 cksum=0x4c2e urg=0 opts=[NOP,NOP,TS val=… ecr=…]
+         hlen=32 flags=ACK,PSH win=502 cksum=0x4c2e urg=0 opts=[NOP, NOP, TS val=… ecr=…]
   [HTTP] GET / HTTP/1.1
          Host: neverssl.com
          User-Agent: curl/8.5.0
@@ -135,21 +135,21 @@ sudo python3 -m src.main --iface enp0s3 --proto http,dns
 ```
 [CONN] 10.0.2.15:51234 <-> 34.223.124.45:80  (HTTP)
   연결설정  #10 OUT SYN      seq=0
-            #11 IN  SYN,ACK  seq=0 ack=1
+            #11 IN  ACK,SYN  seq=0 ack=1
             #12 OUT ACK      seq=1 ack=1          (3-way handshake 완료)
   데이터    OUT 1개 세그먼트 78 bytes / IN 4개 세그먼트 4,321 bytes
-  연결해제  #20 OUT FIN,ACK  seq=79 ack=4322
-            #21 IN  FIN,ACK  seq=4322 ack=80
+  연결해제  #20 OUT ACK,FIN  seq=79 ack=4322
+            #21 IN  ACK,FIN  seq=4322 ack=80
             #22 OUT ACK      seq=80 ack=4323      (정상 종료)
 ```
 
-- RST로 끝나면 `연결해제  RST (비정상 종료)`
+- RST로 끝나면 연결해제에 RST 세그먼트와 `(RST, 비정상 종료)`
 - 캡처 시작 전에 열린 연결은 `연결설정  (캡처 전에 열림)`
 
 ### 4.3 traceroute 홉 표 (traceroute 패킷이 있었을 때, 종료 시)
 
 ```
-[ROUTE] 10.0.2.15 -> 34.223.124.45
+[ROUTE] -> 34.223.124.45
   hop  router            rtt1     rtt2     rtt3     ICMP
     1  10.0.2.2          0.4 ms   0.3 ms   0.3 ms   11/0 Time Exceeded
     2  192.168.0.1       2.1 ms   2.0 ms   2.3 ms   11/0 Time Exceeded
@@ -179,11 +179,12 @@ sudo python3 -m src.main --iface enp0s3 --proto http,dns
 | `ip` | dict \| None | `link_ip.py` | `version`, `header_len`, `tos`, `total_length`, `id`, `df`, `mf`, `frag_offset`, `ttl`, `protocol`, `checksum`, `checksum_ok`, `src_ip`, `dst_ip` |
 | `proto` | str | `link_ip.py` | `"TCP"` / `"UDP"` / `"ICMP"` / `"OTHER"` |
 | `tcp` | dict \| None | `transport.py` | `src_port`, `dst_port`, `seq`, `ack`, `header_len`, `flags`(문자열), `flag_bits`(int), `window`, `checksum`, `urgent`, `options`(list[str]) |
-| `udp` | dict \| None | `transport.py` | `src_port`, `dst_port`, `length`, `checksum`, `checksum_ok` |
+| `udp` | dict \| None | `transport.py` | `src_port`, `dst_port`, `length`, `checksum`, `checksum_ok`, `checksum_partial` |
 | `icmp` | dict \| None | `icmp.py` | `type`, `code`, `type_name`, `checksum`, (Echo) `id`, `seq`, (오류 메시지) `orig_src_ip`, `orig_dst_ip`, `orig_proto`, `orig_src_port`, `orig_dst_port`, `orig_ttl` |
 | `payload` | bytes | `transport.py` | 전송 계층 헤더를 뗀 데이터 |
 | `app` | AppInfo \| None | `app_*.py` | 응용 계층 해석 결과 |
 | `rel_seq`, `rel_ack` | int \| None | `tcp_track.py` | F3에서 채움 (연결 시작 기준 상대값) |
+| `frame` | bytes | Captured | 원본 프레임 (`--hex` 덤프용) |
 
 - `tcp_flags` 문자열 순서는 Wireshark와 같게 고정: `CWR,ECE,URG,ACK,PSH,RST,SYN,FIN` 중 켜진 것만. 예: `"SYN,ACK"`는 `"ACK,SYN"`으로 쓴다.
 
@@ -206,7 +207,7 @@ sudo python3 -m src.main --iface enp0s3 --proto http,dns
 | `handshake` | list[PacketInfo] | SYN, SYN/ACK, ACK |
 | `data_count`, `data_bytes` | dict | 방향별 `{"OUT": n, "IN": n}` |
 | `teardown` | list[PacketInfo] | FIN 교환과 마지막 ACK, 또는 RST |
-| `state` | str | `SYN_SENT` → `ESTABLISHED` → `FIN_WAIT` → `CLOSED` / `RESET` |
+| `state` | str | `SYN_SENT` → `SYN_RCVD` → `ESTABLISHED` → `FIN_WAIT` → `CLOSED` / `RESET` |
 
 ### 5.5 Hop — traceroute
 `(홉 번호, 라우터 IP 또는 None, [rtt ms 또는 None, ...], ICMP type/code 문자열)`
@@ -270,13 +271,15 @@ for captured in capture(filter):
 - UDP: Source Port, Destination Port, Length, Checksum
 - **UDP 체크섬은 반드시 검증한다**: 의사 헤더(출발지 IP 4B, 목적지 IP 4B, 0 1B, Protocol 17 1B, UDP Length 2B) + UDP 헤더(체크섬 칸은 그대로) + 데이터를 16비트 1의 보수로 더해 0이면 `checksum_ok=True`, 아니면 `False`
   - 체크섬 값이 0이면 송신 측이 체크섬을 쓰지 않은 것(IPv4에서 허용) → `checksum_ok=None`
-  - 송신(OUT) 패킷은 NIC 오프로드로 틀린 값일 수 있음 → 출력에서 `offload`로 표시
+  - 데이터가 UDP Length보다 짧게 잡혀(IP 조각 등) 검증할 수 없을 때도 → `checksum_ok=None`
+  - 체크섬을 랜카드가 나중에 채우는 경우(checksum offload) 캡처한 체크섬 칸에는 의사 헤더 합만 들어 있다 → 틀렸지만 이 값과 같으면 `checksum_partial=True`, 출력에서 `offload`로 표시 (보내는 패킷, 그리고 가상 랜카드·VM에서는 받는 패킷에도 생김)
+  - 출력: `ok` / `bad` / `offload` / `unused`(체크섬 0) / `unchecked`(잘려서 검증 불가)
 
 ### 7.3 TCP 연결 추적 (`tcp_track.py`)
 | 단계 | 판단 |
 |---|---|
 | 연결설정 | SYN(OUT 또는 IN) → 반대 방향 SYN,ACK → 처음 SYN 보낸 쪽의 ACK. 이때 양쪽 ISN 저장 |
-| 데이터 전송 | `payload`가 있는 세그먼트. 방향별 개수·바이트 누적. 재전송(같은 Seq 다시 등장)은 `재전송`으로 따로 셈 |
+| 데이터 전송 | `payload`가 있는 세그먼트. 방향별 개수·바이트 누적. 재전송(이미 받은 구간이 다시 등장)은 `재전송`으로 따로 셈. 순서가 바뀌어 늦게 온 세그먼트는 재전송이 아니고, keep-alive(1바이트)는 세지 않음 |
 | 연결해제 | FIN 한쪽 → ACK → 반대쪽 FIN → ACK (FIN,ACK가 겹쳐 3개로 끝나는 경우도 정상) |
 | 비정상 종료 | RST |
 | 상대 Seq/Ack | `seq - ISN`, `ack - 상대 ISN` (Wireshark "relative sequence number"와 같은 값) |

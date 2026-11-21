@@ -38,6 +38,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--pcap", default=None, help="캡처한 프레임을 pcap으로 저장 (예: results/http.pcap)")
     p.add_argument("--count", type=int, default=0, help="N개 패킷을 받으면 종료 (기본: Ctrl+C까지)")
     args = p.parse_args(argv)
+    if args.count < 0:
+        p.error("--count는 0 이상이어야 함 (0 = Ctrl+C까지)")
 
     names = {s.strip().lower() for s in args.proto.split(",") if s.strip()}
     if "all" in names or not names:
@@ -60,8 +62,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     for item in filter(None, (s.strip() for s in args.port.split(","))):
         name, _, value = item.partition("=")
         name = name.strip().lower()
-        if name not in ports or not value.strip().isdigit():
-            p.error(f"--port 형식이 잘못됨: {item} (예: smtp=2525)")
+        if name not in ports or not value.strip().isdigit() or not 1 <= int(value) <= 65535:
+            p.error(f"--port 형식이 잘못됨: {item} (예: smtp=2525, 포트는 1~65535)")
         ports[name] = (int(value),)
     args.ports = ports
     return args
@@ -108,9 +110,15 @@ def main(argv: list[str] | None = None) -> int:
                                hosts=args.hosts)
     tcp = TcpTracker()
     route = RouteTracker()
-    pcap = _try("PcapWriter", PcapWriter, args.pcap) if args.pcap else None
-    if args.log:
-        _try("open_log", output.open_log, args.log)
+    # 저장 파일은 캡처 전에 연다. 폴더가 없거나 권한이 없으면 여기서 알리고 끝낸다.
+    try:
+        pcap = _try("PcapWriter", PcapWriter, args.pcap) if args.pcap else None
+        if args.log:
+            _try("open_log", output.open_log, args.log)
+    except OSError as e:
+        print(f"저장 파일을 열 수 없습니다: {e.filename} ({e.strerror})\n"
+              f"  → 폴더가 있는지, 쓸 권한이 있는지 확인하세요.", file=sys.stderr)
+        return 1
 
     received = 0
     try:
