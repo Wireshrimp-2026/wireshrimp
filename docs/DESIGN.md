@@ -1,276 +1,484 @@
-# Raw Socket 기반 웹 접속 과정·지연 분석기 — 뼈대 설계 및 역할 분배
+# Raw Socket 기반 패킷 캡처·분석기 — 설계 및 역할 분배
 
-> 기준 문서: 팀 설계안 「Raw Socket 기반 웹 접속 과정·지연 분석기」
-> 팀원: **A 김준서, B 라승민, C 강정란, D 오현근** → 아래에서는 **A, B, C, D**로 부른다.
-> 이 문서는 **코드가 아니라 설계**다. 네 명은 이 문서의 폴더 구조, 데이터 형식, 함수 모양을 그대로 따라 각자 자기 파일을 만든다.
+> 기준: 「컴퓨터네트워크 설계 (2026학년도 2학기)」 과제 공지
+> 역할은 **A, B** 두 개로 나눈다 (10장).
+> 이 문서는 이전 설계(웹 접속 지연 측정·DNS 서버 비교 실험)를 대체한다. 이전 설계는 git 기록에 남아 있다.
 
 ---
 
-## 0. 전제 (설계안 기준)
+## 0. 과제 요구사항과 대응
+
+### 0.1 과제 원문 요약
+
+| 구분 | 요구 내용 |
+|---|---|
+| 설계 내용 | 네트워크 상에서 전달되는 패킷을 캡처하고 분석. **송신과 수신을 모두 캡처** |
+| 환경 | 유닉스(리눅스) 또는 윈도우 기반 **raw socket** 프로그램 |
+| 캡처 데이터 | **APP 헤더, TCP(UDP) 헤더, IP 헤더** |
+| 응용 프로토콜 (필수) | **HTTP, DNS** |
+| 응용 프로토콜 (선택) | **e-mail (SMTP, POP 또는 IMAP), traceroute, P2P BitTorrent** |
+| 세부 내용 | Application header / TCP: **연결설정·데이터 전송·연결해제 과정**, Source Port, Destination Port, Sequence No, Acknowledgement No 등 / UDP: Source Port, Destination Port 등 / IP: Source IP, Destination IP 등 |
+| 제출 | 설계보고서 PPT 8쪽 (`design학생이름.ppt`: 목표, 설계 환경, 설계내용 및 결과, 기대효과) + **소스파일**, 11/27(금) 19:00, 팀별 1개 |
+
+### 0.2 우리 대응 — 필수·선택 전부 구현
+
+| 요구 | 구현 | 파일 | 확인 방법 |
+|---|---|---|---|
+| raw socket 캡처 | `AF_PACKET` + `SOCK_RAW`, `ETH_P_ALL` | `capture.py` | `sudo` 실행 |
+| 송신·수신 모두 캡처 | `recvfrom()`의 pkttype으로 OUT/IN 구분 | `capture.py` | 출력에 OUT·IN 둘 다 |
+| IP 헤더 | IPv4 헤더 전 필드 + 체크섬 검증 | `decode/link_ip.py` | Wireshark 비교 |
+| TCP 헤더 | 전 필드 + 옵션(MSS, WS, SACK, TS) + 상대 Seq/Ack | `decode/transport.py` | Wireshark 비교 |
+| UDP 헤더 | 전 필드 | `decode/transport.py` | Wireshark 비교 |
+| TCP 연결설정·전송·해제 | 연결별 상태 추적, 3-way / 데이터 / 4-way 요약 | `tcp_track.py` | 연결 요약 출력 |
+| **HTTP (필수)** | 요청줄·상태줄·헤더 | `decode/app_http.py` | `curl` |
+| **DNS (필수)** | 헤더·플래그·질의·응답 레코드 (UDP·TCP) | `decode/app_dns.py` | `dig` |
+| SMTP (선택) | 명령·응답 코드·메일 헤더 | `decode/app_mail.py` | `curl smtp://` |
+| POP3 (선택) | 명령·`+OK`/`-ERR` | `decode/app_mail.py` | `curl pop3://` |
+| IMAP (선택) | 태그·명령·응답 | `decode/app_mail.py` | `curl imap://` |
+| traceroute (선택) | UDP 프로브 ↔ ICMP 응답 짝, 홉 표 | `decode/icmp.py` `route.py` | `traceroute` |
+| BitTorrent (선택) | 트래커 announce(HTTP+bencode), 피어 handshake·메시지, DHT | `decode/app_bt.py` | `transmission-cli` |
+| 결과 확인 | 화면 출력 + 로그 파일 + **pcap 저장** (Wireshark로 열어 대조) | `output.py` `pcap.py` | Wireshark에서 열기 |
+
+> 이전 설계에 있던 지연 측정(`latency.py`), 접속 묶기(`session.py`), DNS 서버·네트워크 비교 실험(`experiments/`), 그래프(`plot.py`)는 **과제 요구가 아니므로 제외**한다.
+
+---
+
+## 1. 환경
 
 | 항목 | 내용 |
 |---|---|
-| 운영체제 | Ubuntu 22.04 이상 (리눅스 PC는 그대로, 윈도우 PC는 VirtualBox 브리지 모드) |
-| 언어 | Python 3 — `socket`, `struct`만 사용 (scapy, libpcap 금지). 그래프만 matplotlib |
-| 실행 | `sudo` |
-| 필수 | HTTP, DNS / IP·TCP·UDP 헤더 / TCP 연결 설정·전송·해제 추적 / 송수신 모두 캡처 |
-| 선택 | traceroute (UDP 프로브 + ICMP Time Exceeded) |
-| 트래픽 발생 | `curl http://neverssl.com`, `dig`, `traceroute` |
-| 검증 | Wireshark 캡처와 필드 값 비교 |
-
-> ⚠ 설계안에 "확정 필요"로 남은 것: 운영체제/VirtualBox 브리지 모드, 언어(C+Python 안). 이 문서는 **Python 단일 언어**를 전제로 한다.
+| 운영체제 | Ubuntu 22.04 이상 (윈도우 PC는 VirtualBox **브리지 모드**) |
+| 언어 | Python 3 표준 라이브러리만 (`socket`, `struct`, `argparse`, `datetime`). **scapy, libpcap 사용 안 함** |
+| 권한 | `sudo` (raw socket) |
+| 분석 대상 | IPv4 (IPv6는 범위 밖, 트래픽 발생 시 `-4` 옵션 사용) |
+| 검증 도구 | Wireshark (같은 시간에 함께 캡처하거나, 우리 프로그램이 저장한 pcap을 열어 비교) |
+| 트래픽 발생 | `curl`, `dig`, `traceroute`, `transmission-cli`, 메일 테스트 서버(`tools/mail_server.py`) |
 
 ---
 
-## 1. 전체 흐름
+## 2. 전체 흐름
 
 ```
-F1 캡처 ──▶ F2 계층별 해석 ──▶ F3 접속 단위로 묶기 ──▶ F4 지연 측정 ──▶ F5 출력·CSV ──▶ 비교 실험·그래프
-(Captured)    (PacketInfo)        (Session)              (LatencyResult)    (화면, .csv)
+캡처(F1) ──▶ 계층별 해석(F2) ──▶ TCP 연결 추적(F3) ──▶ 출력·저장(F4)
+Captured       PacketInfo            Connection              화면, 로그, pcap
+                (Ethernet→IP→TCP/UDP/ICMP→응용)
 ```
 
-각 화살표에서 넘기는 데이터의 모양(= **약속**)은 2장에 고정한다. 모양만 지키면 서로의 코드 내부를 몰라도 합칠 수 있다.
+| 단계 | 하는 일 |
+|---|---|
+| F1 캡처 | 인터페이스 하나에서 모든 프레임 수신, OUT/IN 판별, 커널 수신 시각 기록, 선택한 프로토콜만 남김 |
+| F2 해석 | Ethernet → IPv4 → TCP/UDP/ICMP → 응용 계층 순으로 파싱. 응용 계층은 포트와 내용으로 판별 |
+| F3 연결 추적 | TCP 연결마다 연결설정(SYN, SYN/ACK, ACK) → 데이터 전송 → 연결해제(FIN, ACK) 단계 기록, 상대 Seq/Ack 계산 |
+| F4 출력·저장 | 패킷별 계층 출력, 연결 종료 시 연결 요약, traceroute 홉 표, 로그 파일·pcap 저장 |
 
 ---
 
-## 2. 데이터 약속 (모든 팀원 공통)
+## 3. 실행 방법
 
-모든 형식은 `src/models.py` 한 파일에 `dataclass`로 정의한다. **이 파일은 팀 합의 없이 고치지 않는다.** (고칠 땐 PR + 단톡방 공지)
+```bash
+sudo python3 -m src.main --iface enp0s3 --proto http,dns
+```
 
-### 2.1 Captured — F1 → F2
-| 필드 | 타입 | 설명 |
+| 옵션 | 필수 | 설명 |
 |---|---|---|
-| `ts` | float | 받은 시각 (초 단위, `time.time()`) |
-| `direction` | str | `"OUT"`(pkttype == PACKET_OUTGOING(4)) / `"IN"`(그 외) |
-| `frame` | bytes | 이더넷 헤더부터 시작하는 프레임 전체 |
+| `--iface` | O | 캡처할 인터페이스 (`ip -br link`로 확인) |
+| `--proto` | | 분석할 프로토콜, 쉼표 구분. `http,dns,smtp,pop3,imap,traceroute,bittorrent,all` (기본 `all`) |
+| `--host` | | 이 IP와 주고받은 패킷만 (DNS 서버 등은 별도로 항상 허용) |
+| `--port` | | 포트 재지정. 예: `smtp=2525,pop3=2110,imap=2143` |
+| `--hex` | | 패킷마다 원본 바이트 hex 덤프도 출력 |
+| `--log` | | 화면 출력을 파일에도 저장 (예: `results/http.txt`) |
+| `--pcap` | | 캡처한 프레임을 pcap 파일로 저장 (예: `results/http.pcap`) |
+| `--count` | | N개 패킷을 받으면 종료 (기본: `Ctrl+C`까지) |
 
-### 2.2 PacketInfo — F2 → F3 (설계안의 "패킷 정보 1건 형식")
-| 필드 | 타입 | 채우는 사람 | 설명 |
+### 3.1 프로토콜 판별 기준
+
+판별은 `decode/app_select.py`의 `parse_app()`에서 한다.
+
+| 프로토콜 | 전송 | 기본 포트 | 내용으로 판별 |
 |---|---|---|---|
-| `ts`, `direction` | float, str | A | Captured에서 그대로 |
-| `src_mac`, `dst_mac` | str | A | `"aa:bb:cc:dd:ee:ff"` |
-| `src_ip`, `dst_ip` | str | A | `"10.0.2.15"` |
-| `ttl` | int | A | |
-| `proto` | str | A | `"TCP"` / `"UDP"` / `"ICMP"` / `"OTHER"` |
-| `src_port`, `dst_port` | int \| None | B | TCP/UDP일 때만 |
-| `tcp_flags` | str \| None | B | `"SYN"`, `"SYN,ACK"`, `"FIN,ACK"` 형식 (대문자, 쉼표, 고정 순서: SYN,FIN,RST,PSH,ACK) |
-| `seq`, `ack` | int \| None | B | TCP일 때만 |
-| `window` | int \| None | B | TCP일 때만 |
-| `udp_length` | int \| None | B | UDP일 때만 |
-| `icmp_type`, `icmp_code` | int \| None | D | ICMP일 때만 |
-| `icmp_orig_dst_ip` | str \| None | D | ICMP 안에 담긴 원본 IP 헤더의 목적지 |
-| `icmp_orig_dst_port` | int \| None | D | ICMP 안에 담긴 원본 UDP 목적지 포트 (traceroute 짝 맞추기용) |
-| `payload_len` | int | B | 전송 계층 헤더를 뗀 데이터 길이 |
-| `dns` | DnsInfo \| None | C | 53번 포트일 때 |
-| `http` | HttpInfo \| None | C | 80번 포트이고 데이터가 있을 때 |
-
-### 2.3 DnsInfo / HttpInfo — F2 내부 (C가 채움)
-**DnsInfo**
-| 필드 | 타입 | 설명 |
-|---|---|---|
-| `txid` | int | Transaction ID |
-| `is_response` | bool | QR 비트 |
-| `qname` | str | `"neverssl.com"` |
-| `qtype` | str | `"A"`, `"AAAA"`, `"CNAME"` 등 |
-| `answers` | list[(str, int)] | `[(응답 IP, TTL), ...]` — A 레코드만 |
-
-**HttpInfo**
-| 필드 | 타입 | 설명 |
-|---|---|---|
-| `is_request` | bool | |
-| `method`, `url`, `host` | str \| None | 요청일 때 |
-| `status_code`, `reason` | int \| None, str \| None | 응답일 때 (`200`, `"OK"`) |
-| `content_length` | int \| None | 헤더에 있을 때 |
-
-> HTTP는 **요청/응답의 첫 줄과 헤더가 있는 패킷**에서만 채운다. 응답 본문이 이어지는 나머지 패킷은 `http = None`, `payload_len > 0`.
-
-### 2.4 Session — F3 → F4 (웹 접속 1회)
-| 필드 | 타입 | 설명 |
-|---|---|---|
-| `domain` | str | DNS 질의 도메인 |
-| `server_ip` | str | DNS 응답 IP |
-| `dns_query`, `dns_response` | PacketInfo \| None | txid로 짝지은 질의/응답 |
-| `conn_key` | (str, int, str, int) \| None | (내 IP, 내 포트, 서버 IP, 서버 포트) |
-| `syn`, `synack`, `handshake_ack` | PacketInfo \| None | 3-way handshake |
-| `http_request` | PacketInfo \| None | 첫 GET |
-| `http_first_response` | PacketInfo \| None | 데이터가 있는 첫 응답(IN) |
-| `fin_packets` | list[PacketInfo] | FIN 교환 + 마지막 ACK |
-| `route_probes` | list[(PacketInfo, PacketInfo \| None)] | (traceroute UDP 프로브, 짝지은 ICMP 응답 또는 None) |
-| `packets` | list[PacketInfo] | 이 접속에 속한 모든 패킷 (시간순, 타임라인 출력용) |
-
-> `dig`처럼 TCP 연결이 없는 DNS 질의·응답도 Session 1개로 만든다 (`syn` 이후 필드는 None). 실험 A가 이 경우다.
-
-### 2.5 LatencyResult — F4 → F5
-| 필드 | 타입 | 설명 |
-|---|---|---|
-| `domain`, `server_ip` | str | |
-| `dns_ms` | float \| None | 질의(OUT) → 응답(IN) |
-| `tcp_connect_ms` | float \| None | SYN(OUT) → SYN+ACK(IN) |
-| `http_first_byte_ms` | float \| None | GET(OUT) → 데이터 있는 첫 응답(IN) |
-| `total_ms` | float \| None | DNS 질의 → 마지막 FIN/ACK |
-| `hops` | list[(int, str \| None, float \| None)] | `[(홉 번호, 라우터 IP, 지연 ms), ...]` — 무응답은 `None` |
-
-> 측정할 수 없는 값은 **0이 아니라 None**. (0과 "측정 못 함"을 구분해야 그래프가 정확함)
-
-### 2.6 CSV 형식 — F5 출력 (설계안 기준)
-```
-measured_at, dns_server, network, domain, dns_ms, tcp_connect_ms, http_first_byte_ms, total_ms, hop_count, hop_delays
-```
-- `measured_at`: `2026-11-20T14:03:11`
-- `dns_server`, `network`: 실행할 때 옵션으로 받은 실험 조건 라벨 (예: `google`, `school-wifi`)
-- `hop_delays`: `"2.1;*;14.8;..."` (세미콜론 구분, 무응답은 `*`)
-- 값이 None이면 빈 칸
+| HTTP | TCP | 80, 8080 | 첫 줄이 `GET`/`POST`/… 또는 `HTTP/1.` |
+| DNS | UDP, TCP | 53 | — (TCP는 앞 2바이트 길이 제거) |
+| SMTP | TCP | 25, 587 | — |
+| POP3 | TCP | 110 | — |
+| IMAP | TCP | 143 | — |
+| traceroute | UDP + ICMP | UDP 33434~33534, ICMP Type 11·3 | ICMP 안 원본 UDP 목적지 포트 |
+| BitTorrent 트래커 | TCP (HTTP) | 6969 등 | HTTP 요청 경로가 `/announce` |
+| BitTorrent 피어 | TCP | 정해지지 않음 | 첫 데이터가 `\x13BitTorrent protocol` → 그 연결 전체를 BitTorrent로 표시 |
+| BitTorrent DHT | UDP | 정해지지 않음 | 내용이 bencode 사전 `d1:` 로 시작하고 `y` 키가 있음 |
+| TLS (참고) | TCP | 443, 465, 993, 995 | 암호화되어 해석하지 않음. `TLS record type=…`만 표시 |
 
 ---
 
-## 3. 함수 약속 (파일별 공개 함수)
+## 4. 출력 형식
 
-> 각자 파일 안에 도우미 함수는 마음대로 추가해도 된다. **아래 공개 함수의 이름·입력·출력만 바꾸지 않는다.**
+### 4.1 패킷별 출력
 
-| 파일 | 공개 함수 | 입력 → 출력 | 담당 |
+```
+#12  14:03:11.123456  OUT  TCP  10.0.2.15:51234 -> 34.223.124.45:80  len=132
+  [ETH ] dst=52:54:00:12:35:02 src=08:00:27:aa:bb:cc type=0x0800(IPv4)
+  [IP  ] ver=4 hlen=20 tos=0x00 total=132 id=0x1c2d flags=DF frag=0 ttl=64 proto=6(TCP) cksum=0x8a1f(ok)
+         src=10.0.2.15 dst=34.223.124.45
+  [TCP ] sport=51234 dport=80 seq=1 ack=1 (raw seq=3021457731 ack=1874020011)
+         hlen=32 flags=PSH,ACK win=502 cksum=0x4c2e urg=0 opts=[NOP,NOP,TS val=… ecr=…]
+  [HTTP] GET / HTTP/1.1
+         Host: neverssl.com
+         User-Agent: curl/8.5.0
+         Accept: */*
+```
+
+- 맨 윗줄: 번호, 시각, **방향(OUT/IN)**, 전송 프로토콜, 주소:포트, 프레임 길이
+- 응용 계층을 판별하지 못한 데이터는 `[DATA] 78 bytes` + 앞 32바이트 hex
+- 비밀번호(POP3 `PASS`, IMAP `LOGIN`, SMTP `AUTH`)는 `****`로 가려서 출력
+
+### 4.2 TCP 연결 요약 (연결이 끝나거나 프로그램 종료 시)
+
+```
+[CONN] 10.0.2.15:51234 <-> 34.223.124.45:80  (HTTP)
+  연결설정  #10 OUT SYN      seq=0
+            #11 IN  SYN,ACK  seq=0 ack=1
+            #12 OUT ACK      seq=1 ack=1          (3-way handshake 완료)
+  데이터    OUT 1개 세그먼트 78 bytes / IN 4개 세그먼트 4,321 bytes
+  연결해제  #20 OUT FIN,ACK  seq=79 ack=4322
+            #21 IN  FIN,ACK  seq=4322 ack=80
+            #22 OUT ACK      seq=80 ack=4323      (정상 종료)
+```
+
+- RST로 끝나면 `연결해제  RST (비정상 종료)`
+- 캡처 시작 전에 열린 연결은 `연결설정  (캡처 전에 열림)`
+
+### 4.3 traceroute 홉 표 (traceroute 패킷이 있었을 때, 종료 시)
+
+```
+[ROUTE] 10.0.2.15 -> 34.223.124.45
+  hop  router            rtt1     rtt2     rtt3     ICMP
+    1  10.0.2.2          0.4 ms   0.3 ms   0.3 ms   11/0 Time Exceeded
+    2  192.168.0.1       2.1 ms   2.0 ms   2.3 ms   11/0 Time Exceeded
+    3  *                 *        *        *        (응답 없음)
+   12  34.223.124.45    151.0 ms 150.2 ms 150.8 ms  3/3 Port Unreachable (도착)
+```
+
+---
+
+## 5. 데이터 약속 (`src/models.py`)
+
+모든 형식은 `src/models.py` 한 파일에만 둔다. **팀 합의 없이 고치지 않는다.** (PR + 단톡방 공지)
+
+### 5.1 Captured — F1 → F2
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `no` | int | 캡처 순번 (1부터) |
+| `ts` | float | 커널 수신 시각 (초) |
+| `direction` | str | `"OUT"` / `"IN"` |
+| `frame` | bytes | 이더넷 헤더부터 프레임 전체 |
+
+### 5.2 PacketInfo — F2 → F3·F4
+| 필드 | 타입 | 채우는 곳 | 설명 |
 |---|---|---|---|
-| `capture.py` | `capture(filter)` | 필터 설정 → `Captured`를 하나씩 내보내는 제너레이터 | A |
-| `capture.py` | `CaptureFilter` | 캡처 인터페이스, 대상 서버 IP 목록, 포트(53, 80), ICMP 허용, traceroute 포트 범위 | A |
-| `decode/link_ip.py` | `parse_ethernet(frame)` | bytes → (MAC 정보, EtherType, 나머지 bytes) | A |
-| `decode/link_ip.py` | `parse_ip(data)` | bytes → (IP 필드 dict, 나머지 bytes) | A |
-| `decode/transport.py` | `parse_tcp(data)`, `parse_udp(data)` | bytes → (필드 dict, 나머지 bytes) | B |
-| `decode/icmp.py` | `parse_icmp(data)` | bytes → (필드 dict, 나머지 bytes) | D |
-| `decode/app_dns.py` | `parse_dns(data)` | bytes → `DnsInfo` | C |
-| `decode/app_http.py` | `parse_http(data)` | bytes → `HttpInfo` 또는 None (첫 줄이 HTTP가 아니면) | C |
-| `decode/__init__.py` | `decode(captured)` | `Captured` → `PacketInfo` 또는 None (IPv4 아님 등). 위 함수들을 차례로 호출해 하나로 합침 | A |
-| `session.py` | `SessionBuilder.add(pkt)` / `.sessions()` | PacketInfo를 하나씩 받음 → 완성된 `Session` 목록 (TCP 없는 DNS만의 접속도 포함) | B |
-| `route.py` | `RouteTracker.add(pkt)` / `.probes_for(server_ip)` | PacketInfo를 하나씩 받음 → 해당 서버로 보낸 `[(프로브, ICMP 응답 또는 None), ...]` | D |
-| `route.py` | `hop_delays(probes)` | `[(프로브, 응답)]` → `[(홉 번호, 라우터 IP, 지연 ms)]` (무응답은 None) | D |
-| `latency.py` | `measure(session)` | `Session` → `LatencyResult` (dns·tcp·http·total, `hops`는 빈 목록) | C |
-| `output.py` | `print_packet(pkt)` | 실시간 한 줄 출력 (`[DNS] OUT ...` 형식) | D |
-| `output.py` | `print_timeline(session, result)` | 접속 1회 요약 타임라인 출력 | D |
-| `output.py` | `CsvWriter(path, dns_server, network).write(result)` | LatencyResult → CSV 한 줄 | D |
-| `experiments/plot.py` | `plot_dns_stats(csv, out)`, `plot_stage_stack(csv, out)` | CSV → 그래프 이미지 | C |
+| `no`, `ts`, `direction`, `frame_len` | | Captured | Captured에서 |
+| `eth` | dict | `link_ip.py` | `src_mac`, `dst_mac`, `ethertype`, `vlan` |
+| `ip` | dict \| None | `link_ip.py` | `version`, `header_len`, `tos`, `total_length`, `id`, `df`, `mf`, `frag_offset`, `ttl`, `protocol`, `checksum`, `checksum_ok`, `src_ip`, `dst_ip` |
+| `proto` | str | `link_ip.py` | `"TCP"` / `"UDP"` / `"ICMP"` / `"OTHER"` |
+| `tcp` | dict \| None | `transport.py` | `src_port`, `dst_port`, `seq`, `ack`, `header_len`, `flags`(문자열), `flag_bits`(int), `window`, `checksum`, `urgent`, `options`(list[str]) |
+| `udp` | dict \| None | `transport.py` | `src_port`, `dst_port`, `length`, `checksum` |
+| `icmp` | dict \| None | `icmp.py` | `type`, `code`, `type_name`, `checksum`, (Echo) `id`, `seq`, (오류 메시지) `orig_src_ip`, `orig_dst_ip`, `orig_proto`, `orig_src_port`, `orig_dst_port`, `orig_ttl` |
+| `payload` | bytes | `transport.py` | 전송 계층 헤더를 뗀 데이터 |
+| `app` | AppInfo \| None | `app_*.py` | 응용 계층 해석 결과 |
+| `rel_seq`, `rel_ack` | int \| None | `tcp_track.py` | F3에서 채움 (연결 시작 기준 상대값) |
 
-**연결 순서 (`main.py`, A)**: `SessionBuilder`(B)와 `RouteTracker`(D)에 같은 패킷을 넣고, 세션마다 `session.route_probes = tracker.probes_for(session.server_ip)` → `result = measure(session)`(C) → `result.hops = hop_delays(session.route_probes)`(D) 순서로 채운다.
+- `tcp_flags` 문자열 순서는 Wireshark와 같게 고정: `CWR,ECE,URG,ACK,PSH,RST,SYN,FIN` 중 켜진 것만. 예: `"SYN,ACK"`는 `"ACK,SYN"`으로 쓴다.
+
+### 5.3 AppInfo — 응용 계층 공통 형식
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `name` | str | `"HTTP"`, `"DNS"`, `"SMTP"`, `"POP3"`, `"IMAP"`, `"BT-TRACKER"`, `"BT-PEER"`, `"BT-DHT"`, `"TLS"` |
+| `summary` | str | 한 줄 요약. 예: `GET / HTTP/1.1`, `Standard query 0x1a2b A neverssl.com` |
+| `lines` | list[str] | 출력할 세부 줄 (헤더 이름: 값). 출력은 이 목록을 그대로 찍는다 |
+| `fields` | dict | 다른 모듈이 쓸 값 (예: DNS `txid`, `is_response`, `answers` / HTTP `method`, `status_code`) |
+
+> 응용 프로토콜마다 형식을 따로 만들지 않고 이 하나로 통일한다. 출력 담당은 `name`, `summary`, `lines`만 보면 된다.
+
+### 5.4 Connection — F3 (TCP 연결 1개)
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `key` | (str, int, str, int) | (클라이언트 IP, 포트, 서버 IP, 포트) — SYN 보낸 쪽이 클라이언트 |
+| `app_name` | str \| None | 연결에서 처음 판별된 응용 프로토콜 |
+| `isn_client`, `isn_server` | int \| None | 초기 Seq (상대값 계산용) |
+| `handshake` | list[PacketInfo] | SYN, SYN/ACK, ACK |
+| `data_count`, `data_bytes` | dict | 방향별 `{"OUT": n, "IN": n}` |
+| `teardown` | list[PacketInfo] | FIN 교환과 마지막 ACK, 또는 RST |
+| `state` | str | `SYN_SENT` → `ESTABLISHED` → `FIN_WAIT` → `CLOSED` / `RESET` |
+
+### 5.5 Hop — traceroute
+`(홉 번호, 라우터 IP 또는 None, [rtt ms 또는 None, ...], ICMP type/code 문자열)`
+
+> 값을 알 수 없으면 **0이 아니라 None**.
+
+---
+
+## 6. 함수 약속 (파일별 공개 함수)
+
+> 도우미 함수는 자유롭게 추가. **아래 공개 함수의 이름·입력·출력만 바꾸지 않는다.**
+
+| 파일 | 공개 함수 | 입력 → 출력 |
+|---|---|---|
+| `capture.py` | `capture(filter)` | `CaptureFilter` → `Captured` 제너레이터 |
+| `capture.py` | `CaptureFilter` | 인터페이스, 프로토콜 목록, 포트 표, 대상 IP |
+| `decode/link_ip.py` | `parse_ethernet(frame)` | bytes → (dict, EtherType, 나머지) |
+| `decode/link_ip.py` | `parse_ip(data)` | bytes → (dict, 나머지) |
+| `decode/transport.py` | `parse_tcp(data)` / `parse_udp(data)` | bytes → (dict, 페이로드) |
+| `decode/icmp.py` | `parse_icmp(data)` | bytes → dict (오류 메시지면 안쪽 IP·UDP 포함) |
+| `decode/app_select.py` | `parse_app(conn_key, proto, src_port, dst_port, from_client, payload, ports)` | 응용 계층 진입점. 3.1 표로 프로토콜을 판별해 아래 파서 중 하나를 부름 → AppInfo 또는 None. `decode()`는 이 함수 하나만 부른다 |
+| `decode/app_dns.py` | `parse_dns(data, over_tcp)` | bytes → AppInfo. `over_tcp`면 앞 2바이트 길이를 이 함수가 뗌 |
+| `decode/app_http.py` | `parse_http(data)` | bytes → AppInfo 또는 None (HTTP 첫 줄이 아님) |
+| `decode/app_bt.py` | `parse_bt_peer(conn_key, data)` / `parse_bt_tracker(data)` / `parse_bt_dht(data)` | bytes → AppInfo 또는 None. 트래커는 HTTP 파서를 거치지 않고 직접 해석, 피어 메시지 경계는 이 파일 안에서 `conn_key`별로 기억 |
+| `decode/app_mail.py` | `parse_smtp(conn_key, data, from_client)` / `parse_pop3(...)` / `parse_imap(...)` | bytes → AppInfo. `STARTTLS` 이후 여부는 이 파일 안에서 `conn_key`별로 기억 |
+| `decode/app_tls.py` | `parse_tls(data)` | bytes → AppInfo (레코드 헤더만) |
+| `decode/__init__.py` | `decode(captured, ports)` | Captured → PacketInfo 또는 None. Ethernet → IP → TCP/UDP/ICMP를 차례로 호출하고, 응용 계층은 `parse_app()`에 넘김 |
+| `tcp_track.py` | `TcpTracker.add(pkt)` → 끝난 `Connection` 또는 None / `.remaining()` | PacketInfo를 하나씩 받아 상대 Seq 채우고 연결 상태 갱신 |
+| `route.py` | `RouteTracker.add(pkt)` / `.hops()` | 프로브 ↔ ICMP 짝 → 목적지별 `[Hop]` |
+| `output.py` | `print_packet(pkt, hex=False)` / `print_connection(conn)` / `print_route(dst, hops)` | 4장 형식으로 출력 (로그 파일 동시 기록) |
+| `pcap.py` | `PcapWriter(path).write(captured)` | pcap 파일 저장 (전역 헤더 24B + 레코드 헤더 16B, linktype 1) |
+
+**연결 순서 (`main.py`)**
+```
+for captured in capture(filter):
+    pcap.write(captured)
+    pkt = decode(captured, ports)
+    if pkt is None: continue
+    conn = tcp.add(pkt)        # 상대 Seq 채움, 끝난 연결이면 반환
+    route.add(pkt)
+    print_packet(pkt)
+    if conn: print_connection(conn)
+종료 시: 남은 연결 print_connection, route.hops() → print_route
+```
 
 **에러 처리 약속**
-- 파서(`parse_*`)는 데이터가 짧거나 깨졌으면 `ValueError`를 던진다.
-- `decode()`(A)는 하위 파서의 예외를 잡아서 해당 부분만 None으로 두고 계속 진행한다. → 한 사람의 버그가 프로그램 전체를 멈추지 않는다.
+- 파서(`parse_*`)는 데이터가 짧거나 깨졌으면 `ValueError`.
+- `decode()`는 하위 파서 예외를 잡아 해당 계층만 None으로 두고 계속 진행 (현재 코드 그대로).
 
 ---
 
-## 4. 폴더 구조
+## 7. 프로토콜별 세부 설계
+
+### 7.1 IP 헤더
+- Version, IHL, TOS, Total Length, Identification, Flags(DF·MF), Fragment Offset, TTL, Protocol, Header Checksum, Source IP, Destination IP
+- 체크섬을 직접 다시 계산해 `ok` / `bad` 표시 (송신 패킷은 NIC 오프로드로 0일 수 있음 → `offload`로 표시)
+- 조각난 패킷의 두 번째 조각부터는 전송 계층 해석 안 함
+
+### 7.2 TCP·UDP 헤더
+- TCP: Source Port, Destination Port, **Sequence No, Acknowledgement No**, Data Offset, Flags 9비트, Window, Checksum, Urgent Pointer, Options(MSS, Window Scale, SACK Permitted, SACK, Timestamps, NOP, EOL)
+- UDP: Source Port, Destination Port, Length, Checksum
+
+### 7.3 TCP 연결 추적 (`tcp_track.py`)
+| 단계 | 판단 |
+|---|---|
+| 연결설정 | SYN(OUT 또는 IN) → 반대 방향 SYN,ACK → 처음 SYN 보낸 쪽의 ACK. 이때 양쪽 ISN 저장 |
+| 데이터 전송 | `payload`가 있는 세그먼트. 방향별 개수·바이트 누적. 재전송(같은 Seq 다시 등장)은 `재전송`으로 따로 셈 |
+| 연결해제 | FIN 한쪽 → ACK → 반대쪽 FIN → ACK (FIN,ACK가 겹쳐 3개로 끝나는 경우도 정상) |
+| 비정상 종료 | RST |
+| 상대 Seq/Ack | `seq - ISN`, `ack - 상대 ISN` (Wireshark "relative sequence number"와 같은 값) |
+
+### 7.4 DNS — 필수
+- 헤더: ID, Flags(QR, Opcode, AA, TC, RD, RA, Z, RCODE), QDCOUNT, ANCOUNT, NSCOUNT, ARCOUNT
+- Question: 이름, Type, Class
+- Answer/Authority/Additional: 이름, Type, Class, TTL, RDLENGTH, RDATA (A, AAAA, CNAME, NS, MX, PTR, TXT, SOA 표시. 그 밖은 hex)
+- **이름 압축 포인터(0xC0)** 처리, 포인터 무한 반복 방지
+- DNS over TCP(`dig +tcp`): 앞 2바이트 길이 제거
+- 요약: `Standard query 0x1a2b A neverssl.com` / `Standard query response 0x1a2b A 34.223.124.45`
+
+### 7.5 HTTP — 필수
+- 요청: Method, Request-URI, Version, 헤더 전체 (`Host`, `User-Agent`, `Accept`, `Connection` …)
+- 응답: Version, Status Code, Reason Phrase, 헤더 전체 (`Content-Type`, `Content-Length`, `Server` …)
+- 헤더 끝(`\r\n\r\n`) 뒤의 본문은 `body: N bytes`만 표시
+- 첫 줄이 HTTP가 아닌 세그먼트(응답 본문 이어짐)는 `[HTTP] continuation N bytes`
+
+### 7.6 SMTP · POP3 · IMAP — 선택 e-mail
+| 프로토콜 | 클라이언트 → 서버 | 서버 → 클라이언트 |
+|---|---|---|
+| SMTP | `EHLO`/`HELO`, `MAIL FROM`, `RCPT TO`, `DATA`, `QUIT`, `STARTTLS`, `AUTH` | 3자리 응답 코드 + 문구 (`220`, `250`, `354`, `221`), 여러 줄 응답(`250-`) |
+| SMTP DATA | 메일 헤더(`From`, `To`, `Subject`, `Date`)와 본문 길이 | — |
+| POP3 | `USER`, `PASS`, `STAT`, `LIST`, `RETR`, `DELE`, `QUIT` | `+OK` / `-ERR` + 문구, `RETR` 응답은 메일 헤더 표시 |
+| IMAP | 태그 + 명령 (`a1 LOGIN`, `a2 SELECT INBOX`, `a3 FETCH 1 BODY[]`, `a4 LOGOUT`) | 태그 없는 응답(`* 3 EXISTS`), 태그 응답(`a2 OK`/`NO`/`BAD`) |
+- 한 세그먼트에 여러 줄이 오면 줄마다 해석
+- `STARTTLS` 이후 데이터는 `TLS (암호화 시작)`으로 표시하고 해석 중단 (연결별 상태는 `app_mail.py` 안에서 `conn_key`로 기억)
+- 비밀번호는 `****`
+
+### 7.7 traceroute — 선택
+- 프로브: UDP, 목적지 포트 33434부터 증가, TTL 1부터 증가 → IP 헤더의 TTL로 홉 번호
+- 응답: ICMP Type 11 Code 0(Time Exceeded) → 중간 라우터 / Type 3 Code 3(Port Unreachable) → 목적지 도착
+- 짝 맞추기: ICMP 안에 담긴 **원본 IP 헤더 + UDP 앞 8바이트**에서 목적지 IP·포트를 꺼내 프로브와 비교
+- RTT = ICMP 수신 시각 − 프로브 송신 시각
+- `traceroute -I`(ICMP Echo 방식)도 지원: Echo Request(8)의 id·seq ↔ Echo Reply(0) 또는 Time Exceeded 안의 원본 ICMP id·seq
+
+### 7.8 BitTorrent — 선택
+| 부분 | 해석 내용 |
+|---|---|
+| 트래커 요청 (HTTP GET `/announce?…`) | `info_hash`(URL 디코딩 → 40자리 hex), `peer_id`, `port`, `uploaded`, `downloaded`, `left`, `event`, `compact` |
+| 트래커 응답 (bencode) | `interval`, `complete`, `incomplete`, `peers` (compact 6바이트 → `IP:port` 목록) |
+| 피어 handshake | pstrlen(19), pstr(`BitTorrent protocol`), reserved 8바이트(확장 비트), info_hash, peer_id |
+| 피어 메시지 | 4바이트 길이 + ID: keep-alive, choke(0), unchoke(1), interested(2), not interested(3), have(4) piece, bitfield(5) 길이, request(6) index·begin·length, piece(7) index·begin·블록 크기, cancel(8), extended(20) |
+| 메시지 경계 | piece 메시지는 여러 세그먼트에 걸침 → `app_bt.py` 안에 연결(`conn_key`)별 "남은 바이트"를 기억해 다음 메시지 시작 위치를 찾음 |
+| 트래커·피어 판별 | `parse_app()`이 `parse_bt_tracker()`를 먼저 부르고, None이면 `parse_http()`로 넘김. 피어 handshake 시그니처 확인도 `parse_app()` 안에서 함. 트래커 요청줄·bencode 응답은 `app_bt.py`가 직접 해석 |
+| DHT (UDP, KRPC) | bencode 해석: `t`(트랜잭션), `y`(q/r/e), `q`(ping, find_node, get_peers, announce_peer) |
+- bencode 해석기는 직접 작성 (정수 `i…e`, 문자열 `길이:값`, 리스트 `l…e`, 사전 `d…e`)
+- 트래픽 발생 시 **암호화 끔** (`transmission-cli -et`) — 켜져 있으면 handshake가 보이지 않음
+
+### 7.9 TLS (참고)
+- 443/465/993/995: TLS 레코드 헤더(Content Type, Version, Length)만 표시. 내용은 해석하지 않음.
+
+---
+
+## 8. 트래픽 발생과 시연 절차
+
+분석기를 한 터미널에서 띄우고, 다른 터미널에서 아래를 실행한다. 프로토콜마다 결과를 `--log`·`--pcap`으로 저장해 보고서에 쓴다.
+
+| 프로토콜 | 분석기 | 트래픽 발생 |
+|---|---|---|
+| HTTP + DNS | `--proto http,dns --log results/http.txt --pcap results/http.pcap` | `curl -4 http://neverssl.com` |
+| DNS (UDP) | `--proto dns` | `dig @8.8.8.8 example.com A` / `dig @8.8.8.8 gmail.com MX` |
+| DNS (TCP) | `--proto dns` | `dig +tcp @8.8.8.8 example.com` |
+| SMTP | `--proto smtp --host 서버IP` | `curl smtp://서버IP:25 --mail-from a@test.local --mail-rcpt b@test.local -T mail.txt` |
+| POP3 | `--proto pop3 --host 서버IP` | `curl pop3://서버IP/1 -u user:pass` |
+| IMAP | `--proto imap --host 서버IP` | `curl "imap://서버IP/INBOX;UID=1" -u user:pass` |
+| SMTP (실제 서버) | `--proto smtp` | `curl -v smtp://smtp.gmail.com:587` → `EHLO`·`STARTTLS`까지 평문 확인 |
+| traceroute (UDP) | `--proto traceroute` | `traceroute -4 -q 3 neverssl.com` |
+| traceroute (ICMP) | `--proto traceroute` | `sudo traceroute -4 -I neverssl.com` |
+| BitTorrent | `--proto bittorrent --pcap results/bt.pcap` | `transmission-cli -et -w /tmp/bt ubuntu-24.04-desktop-amd64.iso.torrent` (Ubuntu 공식 torrent, 1~2분 후 종료) |
+
+**메일 테스트 서버** (`tools/mail_server.py`)
+- 실제 메일 서버는 대부분 암호화(993, 995, STARTTLS)라 명령이 안 보이므로, **평문 SMTP·POP3·IMAP을 흉내 내는 간단한 서버**를 직접 만든다 (`socket` + `threading`, 미리 넣어 둔 메일 1통, 계정 `user`/`pass`).
+- 분석기를 돌리는 PC가 아닌 **다른 PC**(호스트 윈도우, 팀원 노트북)에서 실행한다. 같은 PC에서 돌리면 `lo`로만 오가서 인터페이스 캡처에 잡히지 않는다.
+- 포트 25/110/143을 쓰면 `sudo` 필요. 권한이 없으면 2525/2110/2143으로 띄우고 분석기에 `--port smtp=2525,pop3=2110,imap=2143`.
+
+**Wireshark 대조**
+- 저장한 `results/*.pcap`을 Wireshark로 열어, 같은 번호의 패킷에서 IP·TCP·UDP·응용 필드가 우리 출력과 같은지 확인한다.
+- 프로토콜마다 대조 화면 캡처 1장씩 → 보고서 "설계내용 및 결과"에 사용.
+
+---
+
+## 9. 폴더 구조
 
 ```
 wireshrimp/
-├─ README.md                  실행 방법, 팀 규칙                     (A)
-├─ docs/
-│  └─ DESIGN.md              이 문서                               (공용)
+├─ README.md
+├─ docs/DESIGN.md                  이 문서
 ├─ src/
-│  ├─ main.py                실행 시작점, 옵션 처리, 전체 연결        (A)
-│  ├─ models.py              2장의 데이터 형식 (dataclass)           (A, 수정은 팀 합의)
-│  ├─ capture.py             F1                                    (A)
-│  ├─ decode/
-│  │  ├─ __init__.py         decode() — 계층 파서 합치기             (A)
-│  │  ├─ link_ip.py          Ethernet, IP                          (A)
-│  │  ├─ transport.py        TCP, UDP                              (B)
-│  │  ├─ icmp.py             ICMP                                  (D)
-│  │  ├─ app_dns.py          DNS                                   (C)
-│  │  └─ app_http.py         HTTP                                  (C)
-│  ├─ session.py             F3 접속 단위로 묶기                    (B)
-│  ├─ route.py               traceroute 경로 추적·홉별 지연          (D)
-│  ├─ latency.py             F4 단계별 지연 측정                    (C)
-│  └─ output.py              F5 화면 출력 + CSV                     (D)
-├─ experiments/
-│  ├─ run_dns_exp.sh         실험 A: DNS 서버별 dig 반복            (A)
-│  ├─ run_net_exp.sh         실험 B: curl + traceroute 반복         (A)
-│  ├─ domains.txt            실험용 도메인 목록                      (A)
-│  └─ plot.py                CSV → 막대 그래프                      (C)
+│  ├─ main.py                      실행 시작점, 옵션, 전체 연결
+│  ├─ models.py                    데이터 형식 (수정은 팀 합의)
+│  ├─ capture.py                   F1 캡처
+│  ├─ pcap.py                      pcap 저장
+│  ├─ output.py                    F4 화면·로그 출력
+│  ├─ tcp_track.py                 F3 TCP 연결 추적
+│  ├─ route.py                     traceroute 홉 표
+│  └─ decode/
+│     ├─ __init__.py               decode(): 계층 파서 합치기
+│     ├─ link_ip.py                Ethernet, IPv4
+│     ├─ app_select.py             parse_app(): 응용 프로토콜 판별
+│     ├─ app_tls.py                TLS 레코드 헤더
+│     ├─ transport.py              TCP, UDP
+│     ├─ icmp.py                   ICMP
+│     ├─ app_dns.py                DNS
+│     ├─ app_http.py               HTTP
+│     ├─ app_bt.py                 BitTorrent (트래커, 피어, DHT, bencode)
+│     └─ app_mail.py               SMTP, POP3, IMAP
+├─ tools/
+│  └─ mail_server.py               평문 메일 테스트 서버
 ├─ tests/
-│  ├─ samples/               Wireshark에서 뽑은 hex 샘플             (각자)
-│  ├─ test_link_ip.py                                              (A)
-│  ├─ test_transport.py      test_session.py                       (B)
-│  ├─ test_dns.py  test_http.py  test_latency.py                   (C)
-│  └─ test_icmp.py  test_route.py  test_output.py                  (D)
-└─ results/                  실험 CSV, 그래프 이미지
+│  ├─ samples/                     Wireshark에서 뽑은 hex 샘플
+│  ├─ test_link_ip.py  test_capture.py  test_pcap.py  test_output.py
+│  ├─ test_transport.py  test_tcp_track.py  test_http.py
+│  ├─ test_dns.py  test_bt.py
+│  └─ test_icmp.py  test_route.py  test_mail.py
+└─ results/                        로그, pcap, 대조 화면 캡처
 ```
 
-**실행 모양 (main.py)**
-```
-sudo python3 -m src.main --iface wlo1 --target neverssl.com --dns-server google --network school-wifi --csv results/exp_a.csv
-```
+### 9.1 기존 코드 정리
+
+| 파일 | 처리 |
+|---|---|
+| `capture.py` | **유지.** `CaptureFilter`를 프로토콜 목록·포트 표 기준으로 바꾸고 `no`(순번) 추가 |
+| `decode/link_ip.py` | **유지.** IP 체크섬 검증 추가 |
+| `decode/__init__.py` | **유지.** 응용 계층은 `parse_app()` 한 번 호출로 바꿈 (DNS TCP 길이 떼기도 여기서 빼서 `parse_dns`로), dict 그대로 담기 |
+| `models.py` | **다시 작성** (5장) |
+| `main.py` | **다시 작성** (3장 옵션, 6장 연결 순서) |
+| `decode/transport.py` `icmp.py` `app_dns.py` `app_http.py` `route.py` `output.py` | 새 약속에 맞춰 구현 |
+| `session.py` `latency.py` `experiments/` 전체 | **삭제** (과제 범위 밖) |
+| `tests/test_session.py` `test_latency.py` | **삭제**, 대신 `test_tcp_track.py` |
 
 ---
 
-## 5. 역할 분배
+## 10. 역할 분배
 
-| 담당 | 맡는 부분 | 파일 (본인만 수정) | 핵심 산출물 |
-|---|---|---|---|
-| **A 김준서** — **캡처·통합** | F1 캡처 (AF_PACKET, OUT/IN 판별, 필터, 시각 기록) / Ethernet·IP 파싱 / `decode()` 합치기 / 전체 실행 흐름 / 실험 실행 스크립트 | `capture.py` `decode/link_ip.py` `decode/__init__.py` `main.py` `models.py` `experiments/run_*.sh` `domains.txt` | 패킷이 잡혀서 PacketInfo로 나오는 것 |
-| **B 라승민** — **전송 계층·연결 추적** | TCP·UDP 파싱 / **F3 접속 묶기** (DNS 응답 IP ↔ SYN 연결, 4개 묶음, HTTP·FIN 붙이기) | `decode/transport.py` `session.py` | Session 목록 |
-| **C 강정란** — **응용 계층·지연** | DNS 파싱 (이름 압축 포인터 포함) / HTTP 파싱 / **F4 단계별 지연** (Transaction ID 짝, 4개 묶음 짝) / 그래프 (평균·최대·표준편차, 단계 누적 막대) | `decode/app_dns.py` `decode/app_http.py` `latency.py` `experiments/plot.py` | LatencyResult, 그래프 |
-| **D 오현근** — **경로·출력** | ICMP 파싱 (안에 담긴 원본 IP·UDP 꺼내기) / **traceroute 경로 추적** (프로브 ↔ ICMP 짝, 홉별 지연) / **F5** 실시간 출력, 타임라인, CSV | `decode/icmp.py` `route.py` `output.py` | 홉별 지연, 화면 출력, CSV |
+| 담당 | 맡는 부분 | 파일 (본인만 수정) |
+|---|---|---|
+| **A** — 패킷·연결·출력 | Ethernet·IPv4 헤더(체크섬 검증), TCP 헤더(옵션 포함)·UDP 헤더, TCP 연결 추적(연결설정·데이터·해제, 상대 Seq/Ack, 재전송, RST), `decode()` 합치기, 실행 흐름·옵션, 화면·로그 출력(4장 형식 전부), pcap 저장 | `decode/link_ip.py` `decode/transport.py` `decode/__init__.py` `tcp_track.py` `main.py` `models.py` `output.py` `pcap.py` |
+| **B** — 응용 프로토콜·traceroute | 응용 프로토콜 판별(`parse_app()`), HTTP 요청·응답, DNS(헤더·플래그·레코드, 이름 압축, TCP DNS 길이 처리), SMTP·POP3·IMAP(명령·응답, STARTTLS 이후 중단, 비밀번호 가림), bencode 해석기, BitTorrent 트래커·피어 handshake·메시지·DHT, TLS 레코드 헤더, ICMP(Echo, 오류 메시지 안쪽 IP·UDP), traceroute 프로브 짝 맞추기·홉 표(UDP·ICMP 방식) | `decode/app_select.py` `decode/app_http.py` `decode/app_dns.py` `decode/app_mail.py` `decode/app_bt.py` `decode/app_tls.py` `decode/icmp.py` `route.py` |
 
 **이렇게 나눈 이유**
-- 파일 하나에 주인이 한 명 → 같은 파일을 동시에 고칠 일이 없다.
-- B는 TCP를 직접 파싱하므로 "4개 묶음으로 연결 추적"까지 맡는 게 자연스럽다.
-- C는 DNS Transaction ID를 직접 파싱하므로 "DNS 질의↔응답 짝 맞추기"가 포함된 지연 측정과, 그 값을 정리하는 그래프까지 맡는다.
-- D는 ICMP를 직접 파싱하므로 "ICMP 안 원본 포트로 traceroute 짝 맞추기"와 홉별 지연까지 한 흐름으로 맡는다. 경로 기능을 F3·F4에서 떼어내 B·C의 부담을 줄였다.
-- A는 캡처가 가장 먼저 돌아가야 하므로 초반에 바쁘고, 후반에는 실행 흐름과 실험 실행 스크립트를 맡는다.
-- 여러 사람이 손대고 싶어질 `main.py`와 `decode/__init__.py`는 뼈대 단계에서 모든 모듈을 미리 연결해 두었다 → 각자 자기 파일만 채우면 된다.
+- A는 바이트를 받아 IP·TCP·UDP를 풀고 연결을 추적해 화면에 찍는 쪽, B는 과제 공지의 응용 프로토콜(HTTP, DNS, 메일, traceroute, BitTorrent)을 해석하는 쪽.
+- traceroute는 과제 공지에서 응용 프로토콜 목록에 들어 있고, ICMP 파서도 `bytes → dict` 독립 함수라 B가 맡는다.
+- 응용 프로토콜 판별, DNS TCP 길이 처리, 메일·BitTorrent의 연결별 상태를 모두 B의 파일 안에 둬서, A의 `decode()`는 `parse_app()`과 `parse_icmp()` 두 함수만 부른다.
+- 분량: A는 TCP 연결 추적과 출력 3종이 크고, B는 BitTorrent와 traceroute가 크다. 남은 일 기준으로 비슷하게 맞췄다.
 
----
+**역할 사이에 겹치는 곳**
 
-## 6. 의존 관계와 "기다리지 않는" 방법
+서로 상대 파일을 고치지 않고, 아래 약속만 맞춘다.
 
-```
-A(F1, F2 하위) ─▶ B(TCP·UDP) · D(ICMP) · C(DNS·HTTP) ─▶ B(F3) · D(경로) ─▶ C(F4) ─▶ D(F5) ─▶ C(그래프)
-```
-흐름상으로는 앞사람이 끝나야 뒷사람이 돌릴 수 있지만, **2장의 데이터 약속 덕분에 모두 1일차부터 동시에 시작한다.**
-
-| 담당 | 앞 단계가 없을 때 테스트하는 방법 |
+| 맞닿는 곳 | 약속 |
 |---|---|
-| A | 실제 캡처로 바로 테스트 가능 |
-| B (파싱) | Wireshark에서 TCP/UDP 계층을 `Copy → ...as a Hex Stream`으로 뽑은 샘플 |
-| B (F3) | PacketInfo를 손으로 몇 개 만들어서 넣기 (DNS 응답 → SYN → SYN/ACK → GET → FIN 순서) |
-| C (파싱) | Wireshark에서 DNS/HTTP 계층 hex 샘플 |
-| C (F4) | Session을 손으로 만들어서 넣기 (ts만 정확히 넣으면 됨) |
-| C (그래프) | 2.6 형식 CSV를 손으로 몇 줄 만들어서 넣기 |
-| D (ICMP) | Wireshark에서 ICMP Time Exceeded 계층 hex 샘플 |
-| D (경로) | UDP 프로브·ICMP 응답 PacketInfo를 손으로 만들어서 넣기 |
-| D (출력) | LatencyResult를 손으로 만들어서 출력·CSV 확인 |
-| A (실험 스크립트) | 처음부터 작성 가능 |
+| A의 `decode()`가 B를 부름 | `parse_app()`, `parse_icmp()`의 이름·입력·출력 (6장) |
+| A의 `main.py`가 B의 traceroute를 부름 | `RouteTracker.add(pkt)` / `.hops()`, Hop 형식 (5.5) |
+| B의 traceroute가 A의 결과를 읽음 | `pkt.ip`의 `ttl`·`src_ip`·`dst_ip`, `pkt.udp`의 `dst_port` 키만 읽음 (5.2) |
+| A의 출력이 B의 결과를 찍음 | AppInfo의 `name`·`summary`·`lines` (5.3), `pkt.icmp` 키 (5.2) |
+| A의 연결 요약에 응용 이름 표시 | `pkt.app.name`만 읽음 |
+
+### 10.1 완료 기준
+
+- [ ] **A**: IP·TCP(옵션 포함)·UDP 헤더 전 필드와 IP 체크섬 결과, 상대 Seq/Ack가 출력된다. `curl` 1회가 4.2 형식 연결 요약 1개로 나온다 (연결설정 3개, 데이터, 연결해제). 4.1·4.2·4.3 형식이 모두 찍히고 로그 파일에도 같은 내용이 남는다. 캡처한 프레임이 pcap 형식으로 저장된다.
+- [ ] **B**: `parse_app()`이 3.1 표대로 프로토콜을 고른다. HTTP 요청줄·상태줄·헤더가 출력된다. DNS 헤더·플래그·질의·응답(A, AAAA, CNAME, MX)이 UDP·TCP 모두 출력된다. SMTP·POP3·IMAP 명령·응답이 출력되고 비밀번호가 가려진다. BitTorrent handshake의 info_hash·peer_id, 트래커 요청 인자와 응답의 peers 목록, 피어 메시지 종류, DHT 질의 종류가 출력된다. ICMP Type·Code와 안쪽 원본 IP·포트가 나오고, traceroute(UDP·ICMP 방식)가 홉 목록으로 나온다.
+
+### 10.2 공통 약속
+- 데이터 형식은 `src/models.py`에만. 팀 합의 없이 고치지 않는다.
+- 공개 함수의 이름·입력·출력은 바꾸지 않는다.
+- 파서는 깨진 데이터에 `ValueError`. 알 수 없는 값은 None.
+---
+
+## 11. 개발 규칙 (GitHub)
+
+| 규칙 | 내용 |
+|---|---|
+| 저장소 | 조직 `Wireshrimp-2026` 아래 `wireshrimp` |
+| `main` | 항상 실행되는 상태 유지 |
+| 브랜치 | A `feat/packet` `feat/output` · B `feat/app` `feat/route` |
+| PR 필요 | 새 기능, 남의 파일, `models.py`, `main.py` → 다른 한 명이 확인 후 merge |
+| 바로 push | 내 파일의 작은 수정, 오타 (push 전 `git pull`) |
+| 커밋 메시지 | `[F3] FIN 교환 추적 추가`, `[DNS] MX 레코드 해석` 처럼 앞에 기능·프로토콜 |
 
 ---
 
-## 7. 개발 규칙 (GitHub)
+## 12. 일정 (11/21 기준, 마감 11/27(금) 19:00)
 
-- 저장소: 조직 `Wireshrimp-2026` 아래 `wireshrimp` 1개
-- `main`은 항상 실행되는 상태 유지
-- 각자 브랜치: A `feat/capture` `feat/experiments` / B `feat/transport` `feat/session` / C `feat/dns-http` `feat/latency` `feat/plot` / D `feat/icmp-route` `feat/output`
-- **내 파일만 고치는 작은 수정** → 바로 push 가능 (push 전 `git pull` 필수)
-- **단순 버그 수정, 주석·오타 수정** → PR 없이 `main`에 바로 push 가능 (push 전 `git pull` 필수)
-- **새 기능, 큰 수정, 남의 파일, `models.py`, `main.py`** → PR, 한 명 이상 확인 후 merge
-- 커밋 메시지: `[F3] SYN 4개 묶음 추적 추가` 처럼 기능 번호를 앞에
+| 날짜 | 할 일 |
+|---|---|
+| 11/21(토) | 이 문서 확정, `models.py`·`main.py` 새 약속으로 교체, 기존 범위 밖 파일 삭제 |
+| 11/21~23 | 파서 구현 + hex 샘플 단위 테스트 |
+| 11/23(월) | 중간 점검: HTTP·DNS가 처음부터 끝까지 출력되는지 (필수 먼저) |
+| 11/24(화) | 선택 기능 마무리: 메일, traceroute, BitTorrent |
+| 11/25(수) | 통합 시연: 8장 표 순서대로 전부 실행, 로그·pcap 저장, Wireshark 대조 화면 캡처 |
+| 11/26(목) | 설계보고서 PPT 8쪽 작성 (아래 13장), 소스 정리 |
+| 11/27(금) 19:00 | **`design학생이름.ppt` + 소스파일 eclass 업로드** (팀 1개) |
 
 ---
 
-## 8. 일정 (오늘 11/10 기준)
+## 13. 설계보고서 PPT 8쪽 구성
 
-| 날짜 | 할 일 | 담당 |
+| 쪽 | 제목 | 내용 |
 |---|---|---|
-| ~11/13(금) 19:00 | **설계계획서 PPT 5장 제출** | 전원 |
-| 11/14(토) | 저장소 생성, `models.py`·폴더·빈 파일 올리기 (= 뼈대 완성) | A |
-| 11/14~19 | 각자 자기 파일 개발 + 샘플로 단위 테스트 | 전원 |
-| 11/17(화) | 중간 점검: A의 캡처 + decode가 실제로 PacketInfo를 내놓는지 | A 주도 |
-| 11/20~21 | 통합: 실제 `curl`, `dig`, `traceroute`로 끝까지 돌려보기 + Wireshark 비교 | 전원, A 주도 |
-| 11/22~25 | 실험 A(DNS 서버 3종 × 30회), 실험 B(네트워크 3종 × 30회, traceroute 3회) + 그래프 | 전원 |
-| ~11/27(금) 19:00 | **설계보고서 PPT 8장 + 소스 제출** | 전원 |
-
----
-
-## 9. 완료 기준 (각자 체크)
-
-- [ ] **A 김준서**: `sudo` 실행 시 `curl http://neverssl.com` 트래픽이 OUT/IN 구분되어 PacketInfo로 나온다. IP·TTL이 Wireshark와 일치한다. 실험 스크립트로 조건별 반복 실행 시 CSV가 쌓인다.
-
-- [ ] **B 라승민**: Seq/Ack/Flags, UDP 포트·Length가 Wireshark와 일치한다. 접속 1회가 Session 1개로 묶이고, SYN·SYN/ACK·ACK·HTTP 요청·응답·FIN이 모두 붙는다.
-
-- [ ] **C 강정란**: DNS 질의 도메인·응답 IP, HTTP 메서드·상태 코드가 Wireshark와 일치한다. dns_ms, tcp_connect_ms, http_first_byte_ms, total_ms가 계산된다. 조건별 평균·최대·표준편차 그래프와 단계 누적 막대 그래프가 나온다.
-
-- [ ] **D 오현근**: ICMP Type·Code·원본 목적지 IP·포트가 Wireshark와 일치한다. traceroute 프로브와 ICMP 응답이 짝지어져 홉별 지연이 계산된다. 설계안 출력 예시 모양의 타임라인이 찍히고 CSV가 2.6 형식으로 쌓인다.
+| 1 | 목표 | raw socket으로 송수신 패킷 캡처, IP·TCP/UDP·응용 헤더 분석. 필수(HTTP, DNS) + 선택(SMTP·POP3·IMAP, traceroute, BitTorrent) 전부 |
+| 2 | 설계 환경 | Ubuntu, Python 3 표준 라이브러리, AF_PACKET, sudo, Wireshark 검증, 트래픽 발생 도구 |
+| 3 | 설계 내용 ① 구조 | 2장 흐름도, 모듈·담당 표, OUT/IN 판별 방법 |
+| 4 | 설계 내용 ② IP·TCP·UDP | 헤더 해석 필드, TCP 연결설정·전송·해제 추적 방법 |
+| 5 | 결과 ① HTTP·DNS | 출력 화면 + Wireshark 대조, TCP 연결 요약 |
+| 6 | 결과 ② e-mail | SMTP·POP3·IMAP 출력 화면 + Wireshark 대조 |
+| 7 | 결과 ③ traceroute·BitTorrent | 홉 표 vs `traceroute` 출력, BitTorrent handshake·트래커 응답 |
+| 8 | 기대효과 | 계층별 헤더 구조 이해, TCP 상태 변화 확인, Wireshark 없이 직접 분석, 한계(IPv6·TLS 내용 미해석) |
