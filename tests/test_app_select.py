@@ -1,6 +1,7 @@
 # =============================================================================
-# 응용 프로토콜 판별(parse_app) 단위 테스트 — HTTP·DNS 분기 (#10), TLS 분기 (#13), 메일 분기 (#14)
-# 하위 파서(parse_http, parse_dns, parse_tls, parse_smtp·pop3·imap)는 mock으로 바꿔
+# 응용 프로토콜 판별(parse_app) 단위 테스트 — HTTP·DNS 분기 (#10), TLS 분기 (#13), 메일 분기 (#14),
+# BitTorrent 분기 (#17)
+# 하위 파서(parse_http, parse_dns, parse_tls, parse_smtp·pop3·imap, parse_bt_*)는 mock으로 바꿔
 # "어느 파서를 어떤 인자로 불렀나"만 본다
 # =============================================================================
 import contextlib
@@ -9,7 +10,9 @@ import struct
 import unittest
 from unittest import mock
 
-from src.decode.app_select import looks_like_http, match_port, parse_app
+from src.decode import app_select
+from src.decode.app_select import (MAX_BT_PEERS, flow_key, looks_like_bencode_dict, looks_like_http, match_port,
+                                   parse_app)
 from src.models import DEFAULT_PORTS, AppInfo, Captured
 from tests.test_link_ip import eth, ipv4, tcp_header
 
@@ -19,9 +22,14 @@ HTTP_APP = AppInfo("HTTP", "GET / HTTP/1.1", lines=["Host: neverssl.com"])
 TLS_APP = AppInfo("TLS", "TLS record type=22(Handshake) version=TLS 1.0 len=512")
 MAIL_APPS = {"smtp": AppInfo("SMTP", "EHLO mail.txt"), "pop3": AppInfo("POP3", "USER user"),
              "imap": AppInfo("IMAP", "A001 CAPABILITY")}
+BT_APPS = {"peer": AppInfo("BT-PEER", "handshake"), "tracker": AppInfo("BT-TRACKER", "announce 요청"),
+           "dht": AppInfo("BT-DHT", "query ping t=6161")}
 GET = b"GET / HTTP/1.1\r\nHost: neverssl.com\r\n\r\n"
 CLIENT_HELLO = b"\x16\x03\x01\x02\x00"         # 레코드 헤더: Handshake, TLS 1.0, 512
 SERVER_HELLO = b"\x16\x03\x03\x00\x7a"         # 레코드 헤더: Handshake, TLS 1.2, 122
+BT_HANDSHAKE = b"\x13BitTorrent protocol" + bytes(48)
+ANNOUNCE = b"GET /announce?info_hash=%01%02&peer_id=x HTTP/1.1\r\n\r\n"
+PING = b"d1:ad2:id20:abcdefghij0123456789e1:q4:ping1:t2:aa1:y1:qe"
 
 
 def patch_dns(**kw):
@@ -38,6 +46,10 @@ def patch_tls(**kw):
 
 def patch_mail(name, **kw):
     return mock.patch(f"src.decode.app_mail.parse_{name}", **({"return_value": MAIL_APPS[name]} | kw))
+
+
+def patch_bt(name, **kw):
+    return mock.patch(f"src.decode.app_bt.parse_bt_{name}", **({"return_value": BT_APPS[name]} | kw))
 
 
 def app(proto, sport, dport, payload, ports=DEFAULT_PORTS):
@@ -193,6 +205,107 @@ class TestMail(unittest.TestCase):
         ps.assert_called_once()
 
 
+class TestBitTorrent(unittest.TestCase):
+    REVERSE = ("34.223.124.45", 80, "10.0.2.15", 51234)        # KEY를 서버 → 클라이언트 방향으로
+
+    def setUp(self):
+        app_select.reset_state()                                # handshake를 본 연결 기억을 지움
+
+    tearDown = setUp
+
+    def test_peer_remembered_with_flow_key(self):
+        # handshake가 보인 연결은 이후 세그먼트도 피어. parse_bt_peer에는 보내는 쪽이 앞인 키를 넘긴다
+        with patch_bt("peer") as pp, patch_http() as ph:
+            self.assertIs(app("TCP", 51234, 80, BT_HANDSHAKE), BT_APPS["peer"])       # 80번이어도 피어
+            self.assertIs(app("TCP", 80, 51234, b"\x00\x00\x00\x01\x01"), BT_APPS["peer"])
+            self.assertIs(app("TCP", 51234, 80, b"\x00\x00\x00\x00"), BT_APPS["peer"])
+        self.assertEqual(pp.call_args_list, [mock.call(KEY, BT_HANDSHAKE),
+                                             mock.call(self.REVERSE, b"\x00\x00\x00\x01\x01"),
+                                             mock.call(KEY, b"\x00\x00\x00\x00")])
+        ph.assert_not_called()
+
+    def test_peer_wins_over_port_table(self):
+        # 피어는 아무 포트나 쓴다 → TLS·메일·DNS 포트여도 handshake면 피어
+        with patch_bt("peer") as pp, patch_tls() as pt, patch_mail("smtp") as ps, patch_dns() as pd:
+            for port in (443, 25, 53):
+                self.assertIs(parse_app(("10.0.2.15", 50000, "34.223.124.45", port), "TCP", 50000, port,
+                                        BT_HANDSHAKE, DEFAULT_PORTS), BT_APPS["peer"])
+        self.assertEqual(pp.call_count, 3)
+        for other in (pt, ps, pd):
+            other.assert_not_called()
+
+    def test_no_handshake_no_peer(self):
+        with patch_bt("peer") as pp:
+            self.assertIsNone(app("TCP", 51234, 3000, b"\x00\x00\x00\x01\x01"))
+            self.assertIsNone(app("TCP", 51234, 3000, b"\x13BitTorrent"))           # 시그니처가 다 있어야
+        pp.assert_not_called()
+
+    def test_peer_memory_limit(self):
+        with patch_bt("peer") as pp:
+            for i in range(MAX_BT_PEERS + 1):
+                key = ("10.0.2.15", 40000 + i, "34.223.124.45", 6881)
+                parse_app(key, "TCP", 40000 + i, 6881, BT_HANDSHAKE, DEFAULT_PORTS)
+            first = ("10.0.2.15", 40000, "34.223.124.45", 6881)
+            self.assertIsNone(parse_app(first, "TCP", 40000, 6881, b"\x00\x00\x00\x01\x01", DEFAULT_PORTS))
+            last = ("10.0.2.15", 40000 + MAX_BT_PEERS, "34.223.124.45", 6881)
+            self.assertIs(parse_app(last, "TCP", 40000 + MAX_BT_PEERS, 6881, b"\x00\x00\x00\x01\x01",
+                                    DEFAULT_PORTS), BT_APPS["peer"])
+        self.assertEqual(pp.call_count, MAX_BT_PEERS + 2)
+
+    def test_tracker_before_http(self):
+        # 트래커 포트(6969)나 HTTP로 보이는 세그먼트는 parse_bt_tracker 먼저, None이면 parse_http
+        with patch_bt("tracker") as pb, patch_http() as ph:
+            self.assertIs(app("TCP", 51234, 6969, ANNOUNCE), BT_APPS["tracker"])
+            self.assertIs(app("TCP", 51234, 80, ANNOUNCE), BT_APPS["tracker"])
+            self.assertIs(app("TCP", 51234, 2710, ANNOUNCE), BT_APPS["tracker"])     # 내용으로 (HTTP 모양)
+        ph.assert_not_called()
+        self.assertEqual(pb.call_args_list, [mock.call(ANNOUNCE)] * 3)
+        with patch_bt("tracker", return_value=None) as pb, patch_http() as ph:
+            self.assertIs(app("TCP", 51234, 80, GET), HTTP_APP)
+        pb.assert_called_once_with(GET)
+        ph.assert_called_once_with(GET)
+
+    def test_tracker_port_continuation_and_override(self):
+        # 트래커 포트에서 HTTP 첫 줄이 아니면(응답 본문이 이어짐) continuation. --port bittorrent=2710
+        with patch_bt("tracker", return_value=None), patch_http(return_value=None):
+            cont = app("TCP", 6969, 51234, b"5:peers")
+            self.assertEqual((cont.name, cont.summary), ("HTTP", "continuation 7 bytes"))
+            self.assertIsNone(app("TCP", 2710, 51234, b"5:peers"))
+            ports = cli_ports("bittorrent=2710")
+            self.assertEqual(ports["bittorrent"], (2710,))
+            self.assertEqual(app("TCP", 2710, 51234, b"5:peers", ports).summary, "continuation 7 bytes")
+            self.assertIsNone(app("TCP", 6969, 51234, b"5:peers", ports))
+        # --port bittorrent=443 처럼 TLS 포트와 겹치면 TLS (HTTPS 트래커는 암호화되어 있음)
+        with patch_tls() as pt, patch_bt("tracker") as pb:
+            self.assertIs(app("TCP", 51234, 443, CLIENT_HELLO, cli_ports("bittorrent=443")), TLS_APP)
+        pt.assert_called_once_with(CLIENT_HELLO)
+        pb.assert_not_called()
+
+    def test_dht_by_content(self):
+        with patch_bt("dht") as pd, patch_dns() as pdns:
+            self.assertIs(app("UDP", 6881, 51413, PING), BT_APPS["dht"])
+            self.assertIs(app("UDP", 6881, 51413, b"d2:ip6:abcdef1:rde1:t2:aa1:y1:re"), BT_APPS["dht"])  # BEP 42
+            self.assertIsNone(app("UDP", 6881, 51413, b"\x41\x00\x12\x34"))         # uTP 등
+            self.assertIsNone(app("UDP", 6881, 51413, b"dx"))
+            self.assertIs(app("UDP", 40000, 53, PING), DNS_APP)                      # DNS 포트는 DNS
+            self.assertIsNone(app("TCP", 51234, 3000, PING))                         # DHT는 UDP만
+        self.assertEqual(pd.call_args_list, [mock.call(PING), mock.call(b"d2:ip6:abcdef1:rde1:t2:aa1:y1:re")])
+        pdns.assert_called_once()
+        with patch_bt("dht", side_effect=ValueError("broken")):
+            with self.assertRaises(ValueError):                     # 그대로 올림 → decode()가 잡아 [DATA]
+                app("UDP", 6881, 51413, b"d1:ad2:id")
+
+    def test_flow_key_and_bencode_start(self):
+        self.assertEqual(flow_key(KEY, 51234, 80), KEY)
+        self.assertEqual(flow_key(KEY, 80, 51234), self.REVERSE)
+        same = ("10.0.2.15", 6881, "10.0.2.16", 6881)
+        self.assertEqual(flow_key(same, 6881, 6881), same)           # 양쪽 포트가 같으면 방향을 알 수 없음
+        for start in (b"d1:a", b"d2:ip", b"d10:"):
+            self.assertTrue(looks_like_bencode_dict(start), start)
+        for other in (b"d", b"de", b"dx1:", b"1:a", b"\x00d1:", b""):
+            self.assertFalse(looks_like_bencode_dict(other), other)
+
+
 class TestPortTable(unittest.TestCase):
     def test_port_override(self):
         ports = dict(DEFAULT_PORTS) | {"http": (8000,)}           # --port http=8000
@@ -281,6 +394,22 @@ class TestThroughDecode(unittest.TestCase):
         key = ("10.0.2.15", 51234, "34.223.124.45", 25)
         self.assertEqual(ps.call_args_list, [mock.call(key, b"EHLO x\r\n", True),
                                              mock.call(key, b"250 OK\r\n", False)])
+
+    def test_bt_peer_over_tcp_gets_flow_key(self):
+        # decode()가 만든 방향 무관 키를 parse_app이 방향별 키로 돌려서 parse_bt_peer에 넘긴다
+        out = eth(ipv4(tcp_header(51234, 6881, flags=0x18) + BT_HANDSHAKE))
+        back = eth(ipv4(tcp_header(6881, 51234, flags=0x18) + b"\x00\x00\x00\x01\x01",
+                        src="34.223.124.45", dst="10.0.2.15"))
+        app_select.reset_state()
+        try:
+            with patch_bt("peer") as pp:
+                self.assertIs(self.decode(out).app, BT_APPS["peer"])
+                self.assertIs(self.decode(back).app, BT_APPS["peer"])
+        finally:
+            app_select.reset_state()
+        self.assertEqual(pp.call_args_list, [
+            mock.call(("10.0.2.15", 51234, "34.223.124.45", 6881), BT_HANDSHAKE),
+            mock.call(("34.223.124.45", 6881, "10.0.2.15", 51234), b"\x00\x00\x00\x01\x01")])
 
     def test_bad_shape_does_not_stop_decode(self):
         with patch_dns(return_value=AppInfo("DNS", "q", lines=[b"x"])):
