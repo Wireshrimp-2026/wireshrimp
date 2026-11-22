@@ -290,7 +290,8 @@ for captured in capture(filter):
 - Answer/Authority/Additional: 이름, Type, Class, TTL, RDLENGTH, RDATA (A, AAAA, CNAME, NS, MX, PTR, TXT, SOA 표시. 그 밖은 hex)
 - **이름 압축 포인터(0xC0)** 처리, 포인터 무한 반복 방지
 - DNS over TCP(`dig +tcp`): 앞 2바이트 길이 제거
-- 요약: `Standard query 0x1a2b A neverssl.com` / `Standard query response 0x1a2b A 34.223.124.45`
+- 요약: Wireshark Info 칸과 같은 모양 — `Standard query 0x1a2b A neverssl.com` / `Standard query response 0x1a2b A neverssl.com A 34.223.124.45` / 오류면 `… response 0x1a2b No such name A nx.example.com SOA a.iana-servers.net`
+- Flags의 Z·AD·CD는 Wireshark처럼 1비트씩 따로 표시 (dig는 질의에 AD를 켠다), EDNS OPT 레코드(dig가 늘 붙임)는 UDP 크기·DO 비트·옵션 이름으로 표시
 
 ### 7.5 HTTP — 필수
 - 요청: Method, Request-URI, Version, 헤더 전체 (`Host`, `User-Agent`, `Accept`, `Connection` …)
