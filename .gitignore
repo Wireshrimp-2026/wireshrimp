@@ -21,7 +21,7 @@ htmlcov/
 .DS_Store
 
 # --- results/: 큰 파일은 올리지 않는다 ---
-# 실험 CSV와 보고서용 그래프(.png)는 올리고, 원본 캡처·로그·임시 파일은 제외
+# 보고서용 로그(.txt)·화면 캡처(.png)는 올리고, pcap 원본·임시 파일은 제외
 *.pcap
 *.pcapng
 results/raw/
