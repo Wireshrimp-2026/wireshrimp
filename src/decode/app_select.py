@@ -7,6 +7,7 @@
 #            - 트래커는 parse_bt_tracker()를 먼저, None이면 parse_http()
 #            - 피어 handshake가 한 번 보인 연결은 이후에도 BitTorrent 피어로 본다 (conn_key별 기억)
 #            - 메일 파서의 from_client: 상대 포트가 메일 포트면 클라이언트 → 서버
+#            - HTTP 포트인데 parse_http()가 None(첫 줄이 HTTP가 아님)이면 "continuation N bytes" (DESIGN 7.5)
 #            - 돌려주는 AppInfo 형식(lines는 list[str])을 여기서 검사한다 → 틀리면 TypeError
 #              (decode()가 잡아 한 번만 알리고 [DATA]로 넘어감. 출력 단계에서 프로그램이 멈추지 않게)
 # 진행 상황: HTTP·DNS 분기 (#10). TLS·메일·BitTorrent 분기는 각 파서를 만들 때 추가 (#13~#17)
@@ -63,8 +64,11 @@ def _parse_tcp(payload: bytes, src_port: int, dst_port: int,
         from .app_dns import parse_dns
         return parse_dns(payload, over_tcp=True)      # 앞 2바이트 길이는 parse_dns가 뗀다
     if name == "http" or looks_like_http(payload):
-        from .app_http import parse_http
-        return parse_http(payload)
+        from .app_http import http_continuation, parse_http
+        app = parse_http(payload)
+        if app is None and name == "http":
+            return http_continuation(payload)         # 첫 줄이 HTTP가 아님 = 본문이 이어지는 세그먼트
+        return app
     return None
 
 

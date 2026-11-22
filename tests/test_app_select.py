@@ -65,10 +65,14 @@ class TestHttp(unittest.TestCase):
             self.assertIsNone(app("TCP", 51234, 3000, b"\x16\x03\x01\x02\x00"))   # TLS 같은 바이너리
         self.assertEqual(ph.call_count, 2)
 
-    def test_parse_http_none_passes_through(self):
-        # 본문 이어짐 같은 세그먼트: parse_http가 None이면 그대로 None (continuation은 #11에서 정함)
+    def test_continuation_on_http_port(self):
+        # HTTP 포트인데 첫 줄이 HTTP가 아님 = 응답 본문이 이어지는 세그먼트 → continuation
         with patch_http(return_value=None):
-            self.assertIsNone(app("TCP", 80, 51234, b"<html>...</html>"))
+            cont = app("TCP", 80, 51234, b"<html>...</html>")
+            self.assertEqual((cont.name, cont.summary), ("HTTP", "continuation 16 bytes"))
+            self.assertTrue(cont.fields["continuation"])
+            # HTTP 포트가 아니면(내용만 보고 골랐는데 아니었음) continuation으로 만들지 않는다
+            self.assertIsNone(app("TCP", 51234, 3000, b"GET broken"))
 
 
 class TestPortTable(unittest.TestCase):
