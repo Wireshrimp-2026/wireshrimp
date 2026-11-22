@@ -1,0 +1,66 @@
+# =============================================================================
+# 맡은 기능: GitHub Actions CI — PR과 main push마다 자동 점검
+#            - 파이썬 3.10(Ubuntu 22.04 기본)·3.12(Ubuntu 24.04 기본) 두 버전에서 돌린다
+#            - 문법 검사 → 모든 모듈 불러오기(표준 라이브러리만 쓰는지) → 실행 옵션 → 단위 테스트
+#            - raw socket 캡처(sudo, 실제 인터페이스)는 CI에서 돌릴 수 없다 → 실제 캡처는 시연으로 확인
+# =============================================================================
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:          # Actions 탭에서 손으로 다시 돌리기
+
+permissions:
+  contents: read
+
+concurrency:                  # 같은 PR에 새 커밋이 오면 이전 실행은 취소
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unittest:
+    name: 단위 테스트 (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false        # 한 버전이 실패해도 다른 버전 결과까지 본다
+      matrix:
+        python-version: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # 테스트가 아직 없는 파일(B 뼈대, tools/)도 문법 오류·잘못된 escape("\d" 등)를 잡는다
+      - name: 문법 검사
+        run: python -W error::SyntaxWarning -m compileall -q src tools tests
+
+      # 아무 패키지도 설치하지 않은 상태라 scapy 같은 외부 라이브러리를 쓰면 여기서 실패한다
+      - name: 모든 모듈 불러오기 (표준 라이브러리만 쓰는지)
+        run: |
+          python - <<'EOF'
+          import importlib, importlib.util, pathlib, pkgutil, sys
+          import src
+
+          names = ["src"] + [m.name for m in pkgutil.walk_packages(src.__path__, "src.")]
+          paths = sorted(pathlib.Path("tools").glob("*.py"))
+          try:
+              for name in names:
+                  importlib.import_module(name)
+              for path in paths:
+                  spec = importlib.util.spec_from_file_location(f"tools.{path.stem}", path)
+                  spec.loader.exec_module(importlib.util.module_from_spec(spec))
+          except ModuleNotFoundError as e:
+              sys.exit(f"없는 모듈: {e.name} — 외부 라이브러리이거나 import 오타 "
+                       f"(이 프로젝트는 표준 라이브러리만 씁니다)")
+          print(f"모듈 {len(names) + len(paths)}개 불러오기 성공")
+          EOF
+
+      - name: 실행 옵션 확인
+        run: python -m src.main --help
+
+      - name: 단위 테스트
+        run: python -m unittest discover -s tests -t . -v

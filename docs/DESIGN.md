@@ -367,6 +367,7 @@ for captured in capture(filter):
 ```
 wireshrimp/
 ├─ README.md
+├─ .github/workflows/tests.yml     CI (PR·main push마다 문법 검사·단위 테스트, 파이썬 3.10·3.12)
 ├─ docs/DESIGN.md                  이 문서
 ├─ src/
 │  ├─ main.py                      실행 시작점, 옵션, 전체 연결
@@ -459,6 +460,7 @@ wireshrimp/
 | PR 필요 | 새 기능, 남의 파일, `models.py`, `main.py` → 다른 한 명이 확인 후 merge |
 | 바로 push | 내 파일의 작은 수정, 오타 (push 전 `git pull`) |
 | 커밋 메시지 | `[F3] FIN 교환 추적 추가`, `[DNS] MX 레코드 해석` 처럼 앞에 기능·프로토콜, 끝에 issue 번호 `(#12)` |
+| CI | PR·`main` push마다 GitHub Actions(`.github/workflows/tests.yml`)가 문법 검사·모듈 불러오기·단위 테스트를 돌린다. ✗가 뜨면 고친 뒤 merge |
 
 ### 11.1 Issue 규칙 — 역할별로 만든다
 
