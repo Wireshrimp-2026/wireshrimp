@@ -1,5 +1,7 @@
 # wireshrimp
 
+[![tests](https://github.com/Wireshrimp-2026/wireshrimp/actions/workflows/tests.yml/badge.svg)](https://github.com/Wireshrimp-2026/wireshrimp/actions/workflows/tests.yml)
+
 **Raw Socket 기반 패킷 캡처·분석기**
 
 내 PC가 보내고 받는 패킷을 raw socket으로 직접 잡아 **IP · TCP/UDP · 응용 계층 헤더**를 계층별로 보여 줍니다. TCP는 연결설정 → 데이터 전송 → 연결해제 과정을 연결마다 요약합니다.
@@ -89,6 +91,8 @@ curl -4 http://neverssl.com
 python3 -m unittest discover -s tests -t .
 ```
 
+PR을 올리거나 `main`에 push하면 GitHub Actions가 파이썬 3.10·3.12에서 문법 검사와 단위 테스트를 자동으로 돌립니다 ([tests.yml](.github/workflows/tests.yml)). 결과는 PR 화면의 ✓/✗와 Actions 탭에서 봅니다. raw socket 캡처는 CI에서 돌릴 수 없어 시연으로 확인합니다.
+
 > 진행 상황: A 담당(헤더 해석·연결 추적·출력·pcap)은 구현되어 있고, B 담당(응용 프로토콜·ICMP·traceroute)은 아직 뼈대입니다. 구현되지 않은 모듈은 실행 시 `미구현`으로 한 번 알리고 넘어가며, 그동안 응용 계층 데이터는 `[DATA]`로 나옵니다.
 
 ## 폴더 구조
@@ -96,6 +100,7 @@ python3 -m unittest discover -s tests -t .
 ```
 wireshrimp/
 ├─ README.md
+├─ .github/workflows/tests.yml CI (PR·main push마다 문법 검사·단위 테스트)
 ├─ docs/DESIGN.md              설계 문서 (데이터 형식·함수 약속·출력 형식)
 ├─ src/
 │  ├─ main.py                  실행 시작점, 옵션, 전체 연결              A
@@ -146,6 +151,7 @@ wireshrimp/
 | PR 필요 | 새 기능, 남의 파일, `models.py`, `main.py` → 다른 한 명이 확인 후 merge |
 | 바로 push | 내 파일의 작은 수정, 오타 (push 전 `git pull`) |
 | 커밋 메시지 | `[DNS] MX 레코드 해석 (#12)` 처럼 앞에 기능·프로토콜, 끝에 issue 번호 |
+| CI | PR마다 자동 점검. ✗가 뜨면 고친 뒤 merge |
 
 ### Issue 규칙 — 역할별로 만든다
 
