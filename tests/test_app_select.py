@@ -1,6 +1,6 @@
 # =============================================================================
-# 응용 프로토콜 판별(parse_app) 단위 테스트 — HTTP·DNS 분기 (#10)
-# 하위 파서(parse_http, parse_dns)는 mock으로 바꿔 "어느 파서를 어떤 인자로 불렀나"만 본다
+# 응용 프로토콜 판별(parse_app) 단위 테스트 — HTTP·DNS 분기 (#10), TLS 분기 (#13)
+# 하위 파서(parse_http, parse_dns, parse_tls)는 mock으로 바꿔 "어느 파서를 어떤 인자로 불렀나"만 본다
 # =============================================================================
 import contextlib
 import io
@@ -15,7 +15,10 @@ from tests.test_link_ip import eth, ipv4, tcp_header
 KEY = ("10.0.2.15", 51234, "34.223.124.45", 80)
 DNS_APP = AppInfo("DNS", "Standard query 0x1a2b A neverssl.com")
 HTTP_APP = AppInfo("HTTP", "GET / HTTP/1.1", lines=["Host: neverssl.com"])
+TLS_APP = AppInfo("TLS", "TLS record type=22(Handshake) version=TLS 1.0 len=512")
 GET = b"GET / HTTP/1.1\r\nHost: neverssl.com\r\n\r\n"
+CLIENT_HELLO = b"\x16\x03\x01\x02\x00"         # 레코드 헤더: Handshake, TLS 1.0, 512
+SERVER_HELLO = b"\x16\x03\x03\x00\x7a"         # 레코드 헤더: Handshake, TLS 1.2, 122
 
 
 def patch_dns(**kw):
@@ -26,8 +29,18 @@ def patch_http(**kw):
     return mock.patch("src.decode.app_http.parse_http", **({"return_value": HTTP_APP} | kw))
 
 
+def patch_tls(**kw):
+    return mock.patch("src.decode.app_tls.parse_tls", **({"return_value": TLS_APP} | kw))
+
+
 def app(proto, sport, dport, payload, ports=DEFAULT_PORTS):
     return parse_app(KEY, proto, sport, dport, payload, ports)
+
+
+def cli_ports(port_option):
+    """main.py가 --port 옵션을 해석한 포트 표 그대로 (main.py가 깨져도 다른 테스트는 돌게 여기서 불러옴)."""
+    from src.main import parse_args
+    return parse_args(["--iface", "eth0", "--port", port_option]).ports
 
 
 class TestDns(unittest.TestCase):
@@ -73,6 +86,50 @@ class TestHttp(unittest.TestCase):
             self.assertTrue(cont.fields["continuation"])
             # HTTP 포트가 아니면(내용만 보고 골랐는데 아니었음) continuation으로 만들지 않는다
             self.assertIsNone(app("TCP", 51234, 3000, b"GET broken"))
+
+
+class TestTls(unittest.TestCase):
+    def test_tls_ports_both_directions(self):
+        with patch_tls() as pt:
+            for port in (443, 465, 993, 995):
+                self.assertIs(app("TCP", 51234, port, CLIENT_HELLO), TLS_APP)     # 클라이언트 → 서버
+                self.assertIs(app("TCP", port, 51234, SERVER_HELLO), TLS_APP)     # 서버 → 클라이언트
+        self.assertEqual(pt.call_count, 8)
+        pt.assert_any_call(CLIENT_HELLO)
+        pt.assert_any_call(SERVER_HELLO)
+
+    def test_record_continuation_is_none(self):
+        # 레코드 헤더로 시작하지 않는 세그먼트 → parse_tls가 None → 그대로 None ([DATA])
+        with patch_tls(return_value=None) as pt:
+            self.assertIsNone(app("TCP", 443, 51234, b"\x9e\x9f\xa0\xa1"))
+        pt.assert_called_once_with(b"\x9e\x9f\xa0\xa1")
+
+    def test_port_override(self):
+        ports = cli_ports("tls=8443")
+        self.assertEqual(ports["tls"], (8443,))
+        with patch_tls() as pt:
+            self.assertIsNone(app("TCP", 51234, 443, CLIENT_HELLO, ports))       # 443은 이제 TLS 아님
+            pt.assert_not_called()
+            self.assertIs(app("TCP", 51234, 8443, CLIENT_HELLO, ports), TLS_APP)
+            self.assertIs(app("TCP", 8443, 51234, SERVER_HELLO, ports), TLS_APP)
+        self.assertEqual(pt.call_count, 2)
+
+    def test_port_in_both_tls_and_http(self):
+        # --port tls=8080 처럼 한 포트가 http·tls 둘 다에 들면 TLS (TLS 데이터를 HTTP continuation으로 찍지 않게)
+        ports = cli_ports("tls=8080")
+        with patch_tls() as pt, patch_http() as ph:
+            self.assertIs(app("TCP", 51234, 8080, CLIENT_HELLO, ports), TLS_APP)
+        pt.assert_called_once_with(CLIENT_HELLO)
+        ph.assert_not_called()
+
+    def test_plain_http_and_udp_on_443(self):
+        with patch_tls() as pt, patch_http() as ph:
+            # 평문 HTTP 요청줄은 TLS 포트여도 내용으로 HTTP (TLS 레코드는 20~24로 시작해 겹치지 않음)
+            self.assertIs(app("TCP", 51234, 443, GET), HTTP_APP)
+            # UDP 443은 QUIC — TLS 레코드가 아님
+            self.assertIsNone(app("UDP", 51234, 443, CLIENT_HELLO))
+        pt.assert_not_called()
+        ph.assert_called_once_with(GET)
 
 
 class TestPortTable(unittest.TestCase):

@@ -8,9 +8,11 @@
 #            - 피어 handshake가 한 번 보인 연결은 이후에도 BitTorrent 피어로 본다 (conn_key별 기억)
 #            - 메일 파서의 from_client: 상대 포트가 메일 포트면 클라이언트 → 서버
 #            - HTTP 포트인데 parse_http()가 None(첫 줄이 HTTP가 아님)이면 "continuation N bytes" (DESIGN 7.5)
+#            - TLS 포트면 parse_tls(). 레코드 헤더로 시작하지 않는 세그먼트(앞 레코드가 이어지는 중)는
+#              None → [DATA]. 평문 HTTP 요청줄·상태줄은 TLS 포트여도 내용으로 HTTP
 #            - 돌려주는 AppInfo 형식(lines는 list[str])을 여기서 검사한다 → 틀리면 TypeError
 #              (decode()가 잡아 한 번만 알리고 [DATA]로 넘어감. 출력 단계에서 프로그램이 멈추지 않게)
-# 진행 상황: HTTP·DNS 분기 (#10). TLS·메일·BitTorrent 분기는 각 파서를 만들 때 추가 (#13~#17)
+# 진행 상황: HTTP·DNS 분기 (#10), TLS 분기 (#13). 메일·BitTorrent 분기는 각 파서를 만들 때 추가 (#14, #17)
 # 완료 기준: 3.1 표대로 프로토콜이 골라진다. 해당 없음이면 None.
 # =============================================================================
 from __future__ import annotations
@@ -24,7 +26,8 @@ HTTP_STARTS = (b"GET ", b"POST ", b"HEAD ", b"PUT ", b"DELETE ", b"OPTIONS ", b"
                b"CONNECT ", b"TRACE ", b"HTTP/1.")
 
 # 포트로 고를 때 확인하는 순서. 앞에 있는 것이 먼저 (두 포트가 서로 다른 프로토콜에 걸릴 때)
-TCP_BY_PORT = ("dns", "http")
+# tls가 http보다 앞: --port로 한 포트를 둘 다에 넣었을 때 TLS 데이터를 "HTTP continuation"으로 찍지 않게
+TCP_BY_PORT = ("dns", "tls", "http")
 UDP_BY_PORT = ("dns",)
 
 
@@ -69,6 +72,9 @@ def _parse_tcp(payload: bytes, src_port: int, dst_port: int,
         if app is None and name == "http":
             return http_continuation(payload)         # 첫 줄이 HTTP가 아님 = 본문이 이어지는 세그먼트
         return app
+    if name == "tls":
+        from .app_tls import parse_tls
+        return parse_tls(payload)                     # 레코드 헤더로 시작하지 않으면 None
     return None
 
 
