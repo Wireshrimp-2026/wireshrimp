@@ -54,6 +54,7 @@ class TcpTracker:
         """TCP 패킷이면 상대 Seq/Ack를 채우고 연결 상태를 갱신.
 
         연결이 이 패킷으로 끝났으면(마지막 ACK 또는 RST) 그 Connection을, 아니면 None.
+        같은 포트로 새 연결이 열려(새 SYN) 이전 연결이 밀려났으면 이전 Connection을 돌려준다.
         TCP가 아니면 아무것도 하지 않고 None.
         """
         tcp = pkt.tcp
@@ -66,6 +67,12 @@ class TcpTracker:
 
         is_syn = bool(bits & SYN) and not bits & ACK
         track = self._open.get(key)
+        replaced: Optional[Connection] = None
+        if (track is not None and bits & (SYN | ACK | RST | FIN) == SYN
+                and _is_new_syn(track, src, tcp["seq"])):
+            # 연결해제 마지막 ACK를 놓친 채 같은 포트로 다시 연결: 이전 연결을 끝내고 새로 시작
+            replaced = self._finish(key)
+            track = None
         if track is None:
             closed = self._closed.get(key)
             if closed is not None and not is_syn:
@@ -144,7 +151,7 @@ class TcpTracker:
         if all(s.fin_end is not None and s.fin_acked for s in sides):
             conn.state = "CLOSED"
             return self._finish(key)
-        return None
+        return replaced           # 순수 SYN은 여기까지 온다 (위 두 return에는 걸리지 않음)
 
     def remaining(self) -> list[Connection]:
         """프로그램 종료 시 아직 끝나지 않은 연결 목록 (시작 순)."""
@@ -188,6 +195,22 @@ class TcpTracker:
         while len(self._closed) > CLOSED_KEEP:
             self._closed.pop(next(iter(self._closed)))
         return track.conn
+
+
+def _is_new_syn(track: _Track, src: tuple[str, int], seq: int) -> bool:
+    """열린 연결에 온 순수 SYN이 새 연결인지 (SYN 재전송은 ISN이 같다).
+
+    클라이언트 ISN을 알면(SYN을 봤거나, SYN,ACK의 ack - 1) 그것과 비교하고,
+    모르면(캡처 전에 열린 연결) 또는 반대쪽이 보낸 SYN이면 새 연결로 본다.
+    """
+    conn = track.conn
+    if conn.isn_client is not None:
+        known = conn.isn_client
+    elif conn.isn_server is not None:
+        known = track.sides["c"].base            # SYN,ACK부터 잡힌 연결
+    else:
+        known = None
+    return src != track.client or known is None or seq != known
 
 
 def _overlap(ranges: list, start: int, end: int) -> int:

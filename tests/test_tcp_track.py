@@ -149,6 +149,32 @@ class TestTcpTracker(unittest.TestCase):
         self.assertEqual(done[0].state, "CLOSED")
         self.assertEqual(done[0].key, (*CLIENT, *SERVER))
 
+    def test_port_reuse_starts_new_connection(self):
+        # 연결해제 마지막 ACK를 놓친 뒤 같은 포트로 새 연결 → 이전 연결은 끝내고 새 연결을 따로 추적
+        old = curl_session(fin_style=3)[:-1]           # 마지막 ACK 없음
+        isn = 12345
+        new = [seg("c", "SYN", isn), seg("s", "ACK,SYN", 777, isn + 1),
+               seg("c", "ACK", isn + 1, 778), seg("c", "ACK,PSH", isn + 1, 778, b"GET")]
+        t, done = self.run_all(old + new)
+        self.assertEqual(len(done), 1)                 # 새 SYN이 올 때 이전 연결이 나옴
+        self.assertEqual(done[0].isn_client, ISN_C)
+        self.assertEqual(done[0].state, "FIN_WAIT")
+        self.assertEqual(done[0].data_count["OUT"], 1)
+        conn = t.remaining()[0]
+        self.assertEqual(conn.isn_client, isn)
+        self.assertEqual([p.tcp["flags"] for p in conn.handshake], ["SYN", "ACK,SYN", "ACK"])
+        self.assertEqual(conn.state, "ESTABLISHED")
+        self.assertEqual((conn.data_count["OUT"], conn.data_bytes["OUT"]), (1, 3))
+        self.assertEqual((new[3].rel_seq, new[3].rel_ack), (1, 1))
+
+    def test_syn_after_syn_ack_first_is_same_connection(self):
+        # SYN,ACK부터 잡힌 연결에 원래 SYN이 늦게 와도 새 연결이 아니다
+        pkts = curl_session()
+        pkts[0], pkts[1] = pkts[1], pkts[0]
+        _t, done = self.run_all(pkts)
+        self.assertEqual(len(done), 1)
+        self.assertEqual(done[0].state, "CLOSED")
+
     def test_non_tcp_ignored(self):
         pkt = seg("c", "SYN", 1)
         pkt.proto, pkt.tcp = "UDP", None
