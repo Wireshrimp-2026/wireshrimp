@@ -1,6 +1,7 @@
 # =============================================================================
-# 응용 프로토콜 판별(parse_app) 단위 테스트 — HTTP·DNS 분기 (#10), TLS 분기 (#13)
-# 하위 파서(parse_http, parse_dns, parse_tls)는 mock으로 바꿔 "어느 파서를 어떤 인자로 불렀나"만 본다
+# 응용 프로토콜 판별(parse_app) 단위 테스트 — HTTP·DNS 분기 (#10), TLS 분기 (#13), 메일 분기 (#14)
+# 하위 파서(parse_http, parse_dns, parse_tls, parse_smtp·pop3·imap)는 mock으로 바꿔
+# "어느 파서를 어떤 인자로 불렀나"만 본다
 # =============================================================================
 import contextlib
 import io
@@ -16,6 +17,8 @@ KEY = ("10.0.2.15", 51234, "34.223.124.45", 80)
 DNS_APP = AppInfo("DNS", "Standard query 0x1a2b A neverssl.com")
 HTTP_APP = AppInfo("HTTP", "GET / HTTP/1.1", lines=["Host: neverssl.com"])
 TLS_APP = AppInfo("TLS", "TLS record type=22(Handshake) version=TLS 1.0 len=512")
+MAIL_APPS = {"smtp": AppInfo("SMTP", "EHLO mail.txt"), "pop3": AppInfo("POP3", "USER user"),
+             "imap": AppInfo("IMAP", "A001 CAPABILITY")}
 GET = b"GET / HTTP/1.1\r\nHost: neverssl.com\r\n\r\n"
 CLIENT_HELLO = b"\x16\x03\x01\x02\x00"         # 레코드 헤더: Handshake, TLS 1.0, 512
 SERVER_HELLO = b"\x16\x03\x03\x00\x7a"         # 레코드 헤더: Handshake, TLS 1.2, 122
@@ -31,6 +34,10 @@ def patch_http(**kw):
 
 def patch_tls(**kw):
     return mock.patch("src.decode.app_tls.parse_tls", **({"return_value": TLS_APP} | kw))
+
+
+def patch_mail(name, **kw):
+    return mock.patch(f"src.decode.app_mail.parse_{name}", **({"return_value": MAIL_APPS[name]} | kw))
 
 
 def app(proto, sport, dport, payload, ports=DEFAULT_PORTS):
@@ -132,6 +139,60 @@ class TestTls(unittest.TestCase):
         ph.assert_called_once_with(GET)
 
 
+class TestMail(unittest.TestCase):
+    def test_mail_ports_and_from_client(self):
+        # from_client: 목적지 포트가 메일 포트면 True (클라이언트 → 서버), 출발지 포트면 False
+        for name, port in (("smtp", 25), ("smtp", 587), ("pop3", 110), ("imap", 143)):
+            with patch_mail(name) as pm:
+                self.assertIs(app("TCP", 51234, port, b"EHLO x\r\n"), MAIL_APPS[name])
+                pm.assert_called_once_with(KEY, b"EHLO x\r\n", True)
+                pm.reset_mock()
+                self.assertIs(app("TCP", port, 51234, b"250 OK\r\n"), MAIL_APPS[name])
+                pm.assert_called_once_with(KEY, b"250 OK\r\n", False)
+
+    def test_port_override(self):
+        # 서버를 sudo 없이 2525/2110/2143으로 띄웠을 때 (DESIGN 8장)
+        ports = cli_ports("smtp=2525,pop3=2110,imap=2143")
+        self.assertEqual((ports["smtp"], ports["pop3"], ports["imap"]), ((2525,), (2110,), (2143,)))
+        with patch_mail("smtp") as ps, patch_mail("pop3") as pp, patch_mail("imap") as pi:
+            for port in (25, 587, 110, 143):                          # 기본 포트는 이제 메일 아님
+                self.assertIsNone(app("TCP", 51234, port, b"EHLO x\r\n", ports))
+            self.assertIs(app("TCP", 51234, 2525, b"EHLO x\r\n", ports), MAIL_APPS["smtp"])
+            self.assertIs(app("TCP", 2525, 51234, b"250 OK\r\n", ports), MAIL_APPS["smtp"])
+            self.assertIs(app("TCP", 51234, 2110, b"USER user\r\n", ports), MAIL_APPS["pop3"])
+            self.assertIs(app("TCP", 2143, 51234, b"* OK ready\r\n", ports), MAIL_APPS["imap"])
+        self.assertEqual(ps.call_args_list, [mock.call(KEY, b"EHLO x\r\n", True),
+                                             mock.call(KEY, b"250 OK\r\n", False)])
+        pp.assert_called_once_with(KEY, b"USER user\r\n", True)
+        pi.assert_called_once_with(KEY, b"* OK ready\r\n", False)
+
+    def test_mail_wins_over_http(self):
+        # --port smtp=8080 처럼 http 포트와 겹치면 메일. 메일 포트면 내용이 GET으로 시작해도 메일
+        ports = cli_ports("smtp=8080")
+        with patch_mail("smtp") as ps, patch_http() as ph:
+            self.assertIs(app("TCP", 51234, 8080, b"EHLO x\r\n", ports), MAIL_APPS["smtp"])
+            self.assertIs(app("TCP", 51234, 25, GET), MAIL_APPS["smtp"])       # DATA 메일 본문 등
+        ph.assert_not_called()
+        self.assertEqual(ps.call_count, 2)
+        ps.assert_called_with(KEY, GET, True)
+
+    def test_implicit_tls_ports_stay_tls(self):
+        # 465(SMTPS)·993(IMAPS)·995(POP3S)는 tls 목록에만 있어 TLS 분기 그대로
+        with patch_tls() as pt, patch_mail("smtp") as ps, patch_mail("pop3") as pp, patch_mail("imap") as pi:
+            for port in (465, 993, 995):
+                self.assertIs(app("TCP", 51234, port, CLIENT_HELLO), TLS_APP)
+        self.assertEqual(pt.call_count, 3)
+        for pm in (ps, pp, pi):
+            pm.assert_not_called()
+
+    def test_value_error_and_udp(self):
+        with patch_mail("smtp", side_effect=ValueError("binary")) as ps:
+            with self.assertRaises(ValueError):               # 그대로 올림 → decode()가 잡아 [DATA]
+                app("TCP", 51234, 25, CLIENT_HELLO)
+            self.assertIsNone(app("UDP", 51234, 25, b"EHLO x\r\n"))   # 메일은 TCP만
+        ps.assert_called_once()
+
+
 class TestPortTable(unittest.TestCase):
     def test_port_override(self):
         ports = dict(DEFAULT_PORTS) | {"http": (8000,)}           # --port http=8000
@@ -209,6 +270,17 @@ class TestThroughDecode(unittest.TestCase):
             pkt = self.decode(frame)
         self.assertIs(pkt.app, HTTP_APP)
         ph.assert_called_once_with(GET)
+
+    def test_smtp_over_tcp_gets_conn_key(self):
+        # decode()가 만든 방향 무관 연결 키가 메일 파서까지 그대로 간다 (STARTTLS·DATA 상태를 연결별로 기억)
+        out = eth(ipv4(tcp_header(51234, 25, flags=0x18) + b"EHLO x\r\n"))
+        back = eth(ipv4(tcp_header(25, 51234, flags=0x18) + b"250 OK\r\n", src="34.223.124.45", dst="10.0.2.15"))
+        with patch_mail("smtp") as ps:
+            self.assertIs(self.decode(out).app, MAIL_APPS["smtp"])
+            self.assertIs(self.decode(back).app, MAIL_APPS["smtp"])
+        key = ("10.0.2.15", 51234, "34.223.124.45", 25)
+        self.assertEqual(ps.call_args_list, [mock.call(key, b"EHLO x\r\n", True),
+                                             mock.call(key, b"250 OK\r\n", False)])
 
     def test_bad_shape_does_not_stop_decode(self):
         with patch_dns(return_value=AppInfo("DNS", "q", lines=[b"x"])):
