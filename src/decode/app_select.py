@@ -4,8 +4,12 @@
 #            - 포트 표(ports)와 내용으로 프로토콜을 골라 app_* 파서 하나를 부른다
 #              HTTP(80·8080) / DNS(53, TCP면 over_tcp=True) / SMTP(25·587) / POP3(110) / IMAP(143)
 #              TLS(443·465·993·995) / BitTorrent 트래커(/announce) · 피어(handshake 시그니처) · DHT(bencode)
-#            - 트래커는 parse_bt_tracker()를 먼저, None이면 parse_http()
-#            - 피어 handshake가 한 번 보인 연결은 이후에도 BitTorrent 피어로 본다 (conn_key별 기억)
+#            - BitTorrent 피어: handshake(\x13BitTorrent protocol)가 한 번 보인 연결은 이후에도 피어로 본다
+#              (conn_key별 기억, 크기 제한). 피어는 아무 포트나 쓰므로 포트로 고르기 전에 본다
+#              parse_bt_peer()에는 conn_key를 "보내는 쪽 → 받는 쪽" 순서로 돌려서 넘긴다 (메시지 경계가 방향마다 따로)
+#            - BitTorrent 트래커: 트래커 포트(6969 등)이거나 HTTP로 보이면 parse_bt_tracker()를 먼저, None이면 parse_http()
+#            - BitTorrent DHT: UDP 페이로드가 bencode 사전(d + 문자열 길이)으로 시작하면 parse_bt_dht()
+#              (issue의 "d1:"보다 넓힘: BEP 42 ip 키가 붙은 응답은 "d2:ip"로 시작)
 #            - 메일 포트(SMTP·POP3·IMAP)면 parse_smtp/pop3/imap(conn_key, payload, from_client)
 #              from_client: 목적지 포트가 그 메일 포트면 True (클라이언트 → 서버)
 #              내용으로 HTTP를 고르기 전에 본다 → DATA 메일 본문이 "GET "으로 시작해도 메일
@@ -14,11 +18,12 @@
 #              None → [DATA]. 평문 HTTP 요청줄·상태줄은 TLS 포트여도 내용으로 HTTP
 #            - 돌려주는 AppInfo 형식(lines는 list[str])을 여기서 검사한다 → 틀리면 TypeError
 #              (decode()가 잡아 한 번만 알리고 [DATA]로 넘어감. 출력 단계에서 프로그램이 멈추지 않게)
-# 진행 상황: HTTP·DNS 분기 (#10), TLS 분기 (#13), 메일 분기 (#14). BitTorrent 분기는 파서를 만들 때 추가 (#17)
+# 진행 상황: HTTP·DNS 분기 (#10), TLS 분기 (#13), 메일 분기 (#14), BitTorrent 분기 (#17) — 3.1 표 전부
 # 완료 기준: 3.1 표대로 프로토콜이 골라진다. 해당 없음이면 None.
 # =============================================================================
 from __future__ import annotations
 
+from collections import OrderedDict
 from typing import Iterable, Optional
 
 from ..models import AppInfo, ConnKey
@@ -30,9 +35,20 @@ HTTP_STARTS = (b"GET ", b"POST ", b"HEAD ", b"PUT ", b"DELETE ", b"OPTIONS ", b"
 # 포트로 고를 때 확인하는 순서. 앞에 있는 것이 먼저 (두 포트가 서로 다른 프로토콜에 걸릴 때)
 # tls가 http보다 앞: --port로 한 포트를 둘 다에 넣었을 때 TLS 데이터를 "HTTP continuation"으로 찍지 않게
 # 메일도 http보다 앞: --port smtp=8080 처럼 겹치면 메일. 465·993·995는 tls에만 있어 TLS 그대로
-TCP_BY_PORT = ("dns", "tls", "smtp", "pop3", "imap", "http")
+# bittorrent(트래커 포트)는 tls 뒤: --port bittorrent=443 처럼 겹치면 TLS (HTTPS 트래커는 내용이 암호화됨)
+# bittorrent와 http는 같은 분기(트래커 먼저 → 아니면 HTTP)라 둘 사이 순서는 상관없다
+TCP_BY_PORT = ("dns", "tls", "smtp", "pop3", "imap", "bittorrent", "http")
 UDP_BY_PORT = ("dns",)
 MAIL = ("smtp", "pop3", "imap")
+
+BT_HANDSHAKE = b"\x13BitTorrent protocol"    # 피어 handshake 시그니처 (pstrlen 19 + pstr)
+MAX_BT_PEERS = 256                           # 기억할 BitTorrent 피어 연결 수. 넘으면 가장 오래 안 쓴 연결부터 잊음
+_bt_peers: OrderedDict[ConnKey, None] = OrderedDict()
+
+
+def reset_state() -> None:
+    """기억한 BitTorrent 피어 연결을 지운다 (테스트용)."""
+    _bt_peers.clear()
 
 
 def parse_app(conn_key: ConnKey, proto: str, src_port: int, dst_port: int,
@@ -60,12 +76,18 @@ def _parse_udp(payload: bytes, src_port: int, dst_port: int,
     if name == "dns":
         from .app_dns import parse_dns
         return parse_dns(payload, over_tcp=False)
+    if looks_like_bencode_dict(payload):              # BitTorrent DHT (KRPC) — 포트가 정해져 있지 않음
+        from .app_bt import parse_bt_dht
+        return parse_bt_dht(payload)                  # KRPC가 아니면 None, bencode가 깨졌으면 ValueError
     return None        # traceroute 프로브(33434~) 등은 응용 계층이 아님
 
 
 def _parse_tcp(conn_key: ConnKey, payload: bytes, src_port: int, dst_port: int,
                ports: dict[str, tuple[int, ...]]) -> Optional[AppInfo]:
     # 하위 파서는 필요할 때 불러온다 → 아직 만드는 중인 다른 파서 파일이 깨져 있어도 이 분기는 돈다
+    if _bt_peer(conn_key, payload):                   # BitTorrent 피어는 아무 포트나 쓴다 → 포트보다 먼저
+        from .app_bt import parse_bt_peer
+        return parse_bt_peer(flow_key(conn_key, src_port, dst_port), payload)
     name = match_port(TCP_BY_PORT, ports, src_port, dst_port)
     if name == "dns":
         from .app_dns import parse_dns
@@ -74,10 +96,14 @@ def _parse_tcp(conn_key: ConnKey, payload: bytes, src_port: int, dst_port: int,
         from .app_mail import parse_imap, parse_pop3, parse_smtp
         parser = {"smtp": parse_smtp, "pop3": parse_pop3, "imap": parse_imap}[name]
         return parser(conn_key, payload, dst_port in ports.get(name, ()))   # 메일 포트로 가면 클라이언트
-    if name == "http" or looks_like_http(payload):
+    if name in ("bittorrent", "http") or looks_like_http(payload):
+        from .app_bt import parse_bt_tracker
+        app = parse_bt_tracker(payload)               # 트래커 요청(info_hash=)·응답(bencode)이 아니면 None
+        if app is not None:
+            return app
         from .app_http import http_continuation, parse_http
         app = parse_http(payload)
-        if app is None and name == "http":
+        if app is None and name in ("bittorrent", "http"):
             return http_continuation(payload)         # 첫 줄이 HTTP가 아님 = 본문이 이어지는 세그먼트
         return app
     if name == "tls":
@@ -102,6 +128,32 @@ def match_port(names: Iterable[str], ports: dict[str, tuple[int, ...]],
 def looks_like_http(payload: bytes) -> bool:
     """첫 줄이 HTTP 요청줄(GET / …)이나 상태줄(HTTP/1.x …)로 시작하는지."""
     return payload.startswith(HTTP_STARTS)
+
+
+def looks_like_bencode_dict(payload: bytes) -> bool:
+    """bencode 사전(d + 문자열 키 길이)으로 시작하는지 — DHT KRPC 메시지 (예: d1:ad2:id20:…, d2:ip6:…)."""
+    return payload[:1] == b"d" and payload[1:2].isdigit()
+
+
+def flow_key(conn_key: ConnKey, src_port: int, dst_port: int) -> ConnKey:
+    """방향 무관 키 → 보내는 쪽 (IP, 포트)가 앞인 키. 양쪽 포트가 같으면 방향을 알 수 없어 그대로."""
+    a_ip, a_port, b_ip, b_port = conn_key
+    if a_port != b_port and (src_port, dst_port) == (b_port, a_port):
+        return (b_ip, b_port, a_ip, a_port)
+    return conn_key
+
+
+def _bt_peer(conn_key: ConnKey, payload: bytes) -> bool:
+    """handshake가 보였던 연결이거나 이 세그먼트가 handshake로 시작하면 True (그 연결을 기억)."""
+    if conn_key in _bt_peers:
+        _bt_peers.move_to_end(conn_key)
+        return True
+    if not payload.startswith(BT_HANDSHAKE):
+        return False
+    _bt_peers[conn_key] = None
+    if len(_bt_peers) > MAX_BT_PEERS:
+        _bt_peers.popitem(last=False)
+    return True
 
 
 def _checked(app) -> Optional[AppInfo]:
