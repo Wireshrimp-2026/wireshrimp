@@ -95,7 +95,8 @@ class PacketInfo:
                                         # 잘려서 검증 불가), checksum_partial (offload 미완성 값)
     icmp: Optional[dict] = None         # type, code, type_name, checksum, (Echo) id, seq,
                                         # (오류) orig_src_ip, orig_dst_ip, orig_proto,
-                                        # orig_src_port, orig_dst_port, orig_ttl
+                                        # orig_src_port, orig_dst_port, orig_ttl,
+                                        # (원본이 Echo) orig_id, orig_seq
     payload: bytes = b""                # 전송 계층 헤더를 뗀 데이터
     app: Optional[AppInfo] = None       # 응용 계층 해석 결과
     rel_seq: Optional[int] = None       # F3에서 채움 (연결 시작 기준 상대값)

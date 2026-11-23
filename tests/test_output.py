@@ -75,6 +75,18 @@ class TestFormatPacket(unittest.TestCase):
         text = "\n".join(output.format_packet(p))
         self.assertIn("[ICMP] type=11 code=0 Time Exceeded cksum=0xf4ff", text)
         self.assertIn("orig: 10.0.2.15 -> 34.223.124.45 proto=17 ttl=1 port 40001 -> 33434", text)
+        self.assertNotIn(" seq=", text.split("orig:")[1])
+
+    def test_icmp_orig_echo(self):
+        # traceroute -I: 원본이 Echo면 포트 대신 id·seq
+        p = http_pkt(proto="ICMP", tcp=None, app=None, payload=b"", direction="IN",
+                     icmp={"type": 11, "code": 0, "type_name": "Time Exceeded", "checksum": 0xf4ff,
+                           "orig_src_ip": "10.0.2.15", "orig_dst_ip": "34.223.124.45",
+                           "orig_proto": 1, "orig_ttl": 1, "orig_src_port": None,
+                           "orig_dst_port": None, "orig_id": 1234, "orig_seq": 1})
+        text = "\n".join(output.format_packet(p))
+        self.assertIn("orig: 10.0.2.15 -> 34.223.124.45 proto=1 ttl=1 id=1234 seq=1", text)
+        self.assertNotIn("port", text.split("orig:")[1])
 
     def test_no_rel_seq_and_hex(self):
         lines = output.format_packet(http_pkt(rel_seq=None, rel_ack=None), hex=True)

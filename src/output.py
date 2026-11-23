@@ -169,6 +169,8 @@ def _icmp_lines(pkt: PacketInfo) -> list[str]:
                 f"proto={icmp.get('orig_proto')} ttl={icmp.get('orig_ttl')}")
         if icmp.get("orig_dst_port") is not None:
             orig += f" port {icmp.get('orig_src_port')} -> {icmp['orig_dst_port']}"
+        if icmp.get("orig_id") is not None:
+            orig += f" id={icmp['orig_id']} seq={icmp.get('orig_seq')}"
         lines.append(orig)
     return lines
 
