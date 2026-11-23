@@ -17,6 +17,8 @@
 #            - SMTP로 받은 메일과 IMAP APPEND는 메일함 뒤에 붙어 POP3·IMAP으로 다시 읽을 수 있다
 #              (서버를 끄면 사라짐). POP3 DELE는 그 세션에서만 지운 것으로 보이고 실제로는 남긴다
 #              → 시연을 몇 번 해도 1번 메일이 그대로
+#            - Ctrl+C(SIGINT)·kill(SIGTERM)이면 열린 연결을 닫고 끝낸다. bash에서 '&'로 띄우면 SIGINT가
+#              무시 상태로 물려받아지므로 되살린다 (src/main.py와 같은 처리)
 # 완료 기준: DESIGN 8장의 curl smtp:// · pop3:// · imap:// 명령이 성공한다.
 # =============================================================================
 from __future__ import annotations
@@ -28,6 +30,7 @@ import errno
 import re
 import select
 import selectors
+import signal
 import socket
 import sys
 import threading
@@ -879,16 +882,38 @@ def main(argv: list[str] | None = None) -> int:
     except OSError as e:
         print(_bind_error(e, server.failed, ports.get(server.failed or "")), file=sys.stderr)
         return 1
-    for line in _banner(server):
-        print(line, flush=True)
+    saved = _catch_stop_signals()
     try:
+        for line in _banner(server):
+            print(line, flush=True)
         while True:                # 윈도우에서도 Ctrl+C가 먹도록 짧게 자며 기다린다
             time.sleep(0.5)
     except KeyboardInterrupt:
         print("종료합니다.", flush=True)
     finally:
         server.stop()
+        _restore_signals(saved)
     return 0
+
+
+def _catch_stop_signals() -> dict:
+    """SIGINT(Ctrl+C)·SIGTERM(kill)이 오면 KeyboardInterrupt로 정리하고 끝나게 한다 → 바꾸기 전 처리기.
+
+    신호 처리기는 메인 스레드에서만 바꿀 수 있다 → 다른 스레드에서 main()을 부르면 그대로 둔다.
+    """
+    if threading.current_thread() is not threading.main_thread():
+        return {}
+    saved = {}
+    for sig in (signal.SIGINT, getattr(signal, "SIGTERM", None)):
+        if sig is not None:
+            saved[sig] = signal.signal(sig, signal.default_int_handler)
+    return saved
+
+
+def _restore_signals(saved: dict) -> None:
+    for sig, handler in saved.items():
+        if handler is not None:            # 파이썬 밖(C)에서 정한 처리기는 None으로 돌아온다 → 그대로 둠
+            signal.signal(sig, handler)
 
 
 if __name__ == "__main__":
