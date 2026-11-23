@@ -180,7 +180,7 @@ sudo python3 -m src.main --iface enp0s3 --proto http,dns
 | `proto` | str | `link_ip.py` | `"TCP"` / `"UDP"` / `"ICMP"` / `"OTHER"` |
 | `tcp` | dict \| None | `transport.py` | `src_port`, `dst_port`, `seq`, `ack`, `header_len`, `flags`(문자열), `flag_bits`(int), `window`, `checksum`, `urgent`, `options`(list[str]) |
 | `udp` | dict \| None | `transport.py` | `src_port`, `dst_port`, `length`, `checksum`, `checksum_ok`, `checksum_partial` |
-| `icmp` | dict \| None | `icmp.py` | `type`, `code`, `type_name`, `checksum`, (Echo) `id`, `seq`, (오류 메시지) `orig_src_ip`, `orig_dst_ip`, `orig_proto`, `orig_src_port`, `orig_dst_port`, `orig_ttl` |
+| `icmp` | dict \| None | `icmp.py` | `type`, `code`, `type_name`, `checksum`, (Echo) `id`, `seq`, (오류 메시지) `orig_src_ip`, `orig_dst_ip`, `orig_proto`, `orig_src_port`, `orig_dst_port`, `orig_ttl`, (원본이 ICMP Echo, `traceroute -I`) `orig_id`, `orig_seq` |
 | `payload` | bytes | `transport.py` | 전송 계층 헤더를 뗀 데이터 |
 | `app` | AppInfo \| None | `app_*.py` | 응용 계층 해석 결과 |
 | `rel_seq`, `rel_ack` | int \| None | `tcp_track.py` | F3에서 채움 (연결 시작 기준 상대값) |
