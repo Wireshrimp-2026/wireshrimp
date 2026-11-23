@@ -1,57 +1,81 @@
-#1    17:05:57.835114  OUT  TCP  172.23.242.174:37440 -> 34.223.124.45:80  len=74
-  [ETH ] dst=00:15:5d:88:1f:e6 src=00:15:5d:7f:f3:5d type=0x0800(IPv4)
-  [IP  ] ver=4 hlen=20 tos=0x00 total=60 id=0x58fc flags=DF frag=0 ttl=64 proto=6(TCP) cksum=0xa3ed(ok)
-         src=172.23.242.174 dst=34.223.124.45
-  [TCP ] sport=37440 dport=80 seq=0 ack=- (raw seq=938148064 ack=0)
-         hlen=40 flags=SYN win=64240 cksum=0x3e01 urg=0 opts=[MSS=1460, SACK_PERM, TS val=2019124183 ecr=0, NOP, WS=9]
-#2    17:05:58.853608  OUT  TCP  172.23.242.174:37440 -> 34.223.124.45:80  len=74
-  [ETH ] dst=00:15:5d:88:1f:e6 src=00:15:5d:7f:f3:5d type=0x0800(IPv4)
-  [IP  ] ver=4 hlen=20 tos=0x00 total=60 id=0x58fd flags=DF frag=0 ttl=64 proto=6(TCP) cksum=0xa3ec(ok)
-         src=172.23.242.174 dst=34.223.124.45
-  [TCP ] sport=37440 dport=80 seq=0 ack=- (raw seq=938148064 ack=0)
-         hlen=40 flags=SYN win=64240 cksum=0x3e01 urg=0 opts=[MSS=1460, SACK_PERM, TS val=2019125202 ecr=0, NOP, WS=9]
-#3    17:05:59.877573  OUT  TCP  172.23.242.174:37440 -> 34.223.124.45:80  len=74
-  [ETH ] dst=00:15:5d:88:1f:e6 src=00:15:5d:7f:f3:5d type=0x0800(IPv4)
-  [IP  ] ver=4 hlen=20 tos=0x00 total=60 id=0x58fe flags=DF frag=0 ttl=64 proto=6(TCP) cksum=0xa3eb(ok)
-         src=172.23.242.174 dst=34.223.124.45
-  [TCP ] sport=37440 dport=80 seq=0 ack=- (raw seq=938148064 ack=0)
-         hlen=40 flags=SYN win=64240 cksum=0x3e01 urg=0 opts=[MSS=1460, SACK_PERM, TS val=2019126226 ecr=0, NOP, WS=9]
-#4    17:06:00.022820  IN   TCP  34.223.124.45:80 -> 172.23.242.174:37440  len=74
-  [ETH ] dst=00:15:5d:7f:f3:5d src=00:15:5d:88:1f:e6 type=0x0800(IPv4)
-  [IP  ] ver=4 hlen=20 tos=0x00 total=60 id=0x0000 flags=DF frag=0 ttl=243 proto=6(TCP) cksum=0x49e9(ok)
-         src=34.223.124.45 dst=172.23.242.174
-  [TCP ] sport=80 dport=37440 seq=0 ack=1 (raw seq=2674100552 ack=938148065)
-         hlen=40 flags=ACK,SYN win=26847 cksum=0x39cc urg=0 opts=[MSS=1460, SACK_PERM, TS val=3393242364 ecr=2019126226, NOP, WS=7]
-#5    17:06:00.023172  OUT  TCP  172.23.242.174:37440 -> 34.223.124.45:80  len=66
-  [ETH ] dst=00:15:5d:88:1f:e6 src=00:15:5d:7f:f3:5d type=0x0800(IPv4)
-  [IP  ] ver=4 hlen=20 tos=0x00 total=52 id=0x58ff flags=DF frag=0 ttl=64 proto=6(TCP) cksum=0xa3f2(ok)
-         src=172.23.242.174 dst=34.223.124.45
-  [TCP ] sport=37440 dport=80 seq=1 ack=1 (raw seq=938148065 ack=2674100553)
-         hlen=32 flags=ACK win=126 cksum=0x3df9 urg=0 opts=[NOP, NOP, TS val=2019126371 ecr=3393242364]
-#6    17:06:00.023772  OUT  TCP  172.23.242.174:37440 -> 34.223.124.45:80  len=142
-  [ETH ] dst=00:15:5d:88:1f:e6 src=00:15:5d:7f:f3:5d type=0x0800(IPv4)
-  [IP  ] ver=4 hlen=20 tos=0x00 total=128 id=0x5900 flags=DF frag=0 ttl=64 proto=6(TCP) cksum=0xa3a5(ok)
-         src=172.23.242.174 dst=34.223.124.45
-  [TCP ] sport=37440 dport=80 seq=1 ack=1 (raw seq=938148065 ack=2674100553)
-         hlen=32 flags=ACK,PSH win=126 cksum=0x3e45 urg=0 opts=[NOP, NOP, TS val=2019126372 ecr=3393242364]
+#1    22:35:36.579500  OUT  TCP  172.20.10.178:50630 -> 34.223.124.45:80  len=74
+  [ETH ] dst=00:15:5d:68:46:ed src=00:15:5d:bb:93:90 type=0x0800(IPv4)
+  [IP  ] ver=4 hlen=20 tos=0x00 total=60 id=0x475e flags=DF frag=0 ttl=64 proto=6(TCP) cksum=0x9d8b(ok)
+         src=172.20.10.178 dst=34.223.124.45
+  [TCP ] sport=50630 dport=80 seq=0 ack=- (raw seq=650825481 ack=0)
+         hlen=40 flags=SYN win=64240 cksum=0x5601 urg=0 opts=[MSS=1460, SACK_PERM, TS val=1956631607 ecr=0, NOP, WS=10]
+#2    22:35:37.596690  OUT  TCP  172.20.10.178:50630 -> 34.223.124.45:80  len=74
+  [ETH ] dst=00:15:5d:68:46:ed src=00:15:5d:bb:93:90 type=0x0800(IPv4)
+  [IP  ] ver=4 hlen=20 tos=0x00 total=60 id=0x475f flags=DF frag=0 ttl=64 proto=6(TCP) cksum=0x9d8a(ok)
+         src=172.20.10.178 dst=34.223.124.45
+  [TCP ] sport=50630 dport=80 seq=0 ack=- (raw seq=650825481 ack=0)
+         hlen=40 flags=SYN win=64240 cksum=0x5601 urg=0 opts=[MSS=1460, SACK_PERM, TS val=1956632625 ecr=0, NOP, WS=10]
+#3    22:35:38.620719  OUT  TCP  172.20.10.178:50630 -> 34.223.124.45:80  len=74
+  [ETH ] dst=00:15:5d:68:46:ed src=00:15:5d:bb:93:90 type=0x0800(IPv4)
+  [IP  ] ver=4 hlen=20 tos=0x00 total=60 id=0x4760 flags=DF frag=0 ttl=64 proto=6(TCP) cksum=0x9d89(ok)
+         src=172.20.10.178 dst=34.223.124.45
+  [TCP ] sport=50630 dport=80 seq=0 ack=- (raw seq=650825481 ack=0)
+         hlen=40 flags=SYN win=64240 cksum=0x5601 urg=0 opts=[MSS=1460, SACK_PERM, TS val=1956633649 ecr=0, NOP, WS=10]
+#4    22:35:39.644696  OUT  TCP  172.20.10.178:50630 -> 34.223.124.45:80  len=74
+  [ETH ] dst=00:15:5d:68:46:ed src=00:15:5d:bb:93:90 type=0x0800(IPv4)
+  [IP  ] ver=4 hlen=20 tos=0x00 total=60 id=0x4761 flags=DF frag=0 ttl=64 proto=6(TCP) cksum=0x9d88(ok)
+         src=172.20.10.178 dst=34.223.124.45
+  [TCP ] sport=50630 dport=80 seq=0 ack=- (raw seq=650825481 ack=0)
+         hlen=40 flags=SYN win=64240 cksum=0x5601 urg=0 opts=[MSS=1460, SACK_PERM, TS val=1956634673 ecr=0, NOP, WS=10]
+#5    22:35:40.668701  OUT  TCP  172.20.10.178:50630 -> 34.223.124.45:80  len=74
+  [ETH ] dst=00:15:5d:68:46:ed src=00:15:5d:bb:93:90 type=0x0800(IPv4)
+  [IP  ] ver=4 hlen=20 tos=0x00 total=60 id=0x4762 flags=DF frag=0 ttl=64 proto=6(TCP) cksum=0x9d87(ok)
+         src=172.20.10.178 dst=34.223.124.45
+  [TCP ] sport=50630 dport=80 seq=0 ack=- (raw seq=650825481 ack=0)
+         hlen=40 flags=SYN win=64240 cksum=0x5601 urg=0 opts=[MSS=1460, SACK_PERM, TS val=1956635697 ecr=0, NOP, WS=10]
+#6    22:35:41.696690  OUT  TCP  172.20.10.178:50630 -> 34.223.124.45:80  len=74
+  [ETH ] dst=00:15:5d:68:46:ed src=00:15:5d:bb:93:90 type=0x0800(IPv4)
+  [IP  ] ver=4 hlen=20 tos=0x00 total=60 id=0x4763 flags=DF frag=0 ttl=64 proto=6(TCP) cksum=0x9d86(ok)
+         src=172.20.10.178 dst=34.223.124.45
+  [TCP ] sport=50630 dport=80 seq=0 ack=- (raw seq=650825481 ack=0)
+         hlen=40 flags=SYN win=64240 cksum=0x5601 urg=0 opts=[MSS=1460, SACK_PERM, TS val=1956636725 ecr=0, NOP, WS=10]
+#7    22:35:43.708647  OUT  TCP  172.20.10.178:50630 -> 34.223.124.45:80  len=74
+  [ETH ] dst=00:15:5d:68:46:ed src=00:15:5d:bb:93:90 type=0x0800(IPv4)
+  [IP  ] ver=4 hlen=20 tos=0x00 total=60 id=0x4764 flags=DF frag=0 ttl=64 proto=6(TCP) cksum=0x9d85(ok)
+         src=172.20.10.178 dst=34.223.124.45
+  [TCP ] sport=50630 dport=80 seq=0 ack=- (raw seq=650825481 ack=0)
+         hlen=40 flags=SYN win=64240 cksum=0x5601 urg=0 opts=[MSS=1460, SACK_PERM, TS val=1956638737 ecr=0, NOP, WS=10]
+#8    22:35:43.870082  IN   TCP  34.223.124.45:80 -> 172.20.10.178:50630  len=74
+  [ETH ] dst=00:15:5d:bb:93:90 src=00:15:5d:68:46:ed type=0x0800(IPv4)
+  [IP  ] ver=4 hlen=20 tos=0x00 total=60 id=0x0000 flags=DF frag=0 ttl=241 proto=6(TCP) cksum=0x33e9(ok)
+         src=34.223.124.45 dst=172.20.10.178
+  [TCP ] sport=80 dport=50630 seq=0 ack=1 (raw seq=677619699 ack=650825482)
+         hlen=40 flags=ACK,SYN win=26847 cksum=0xea0a urg=0 opts=[MSS=1460, SACK_PERM, TS val=495161532 ecr=1956638737, NOP, WS=7]
+#9    22:35:43.870226  OUT  TCP  172.20.10.178:50630 -> 34.223.124.45:80  len=66
+  [ETH ] dst=00:15:5d:68:46:ed src=00:15:5d:bb:93:90 type=0x0800(IPv4)
+  [IP  ] ver=4 hlen=20 tos=0x00 total=52 id=0x4765 flags=DF frag=0 ttl=64 proto=6(TCP) cksum=0x9d8c(ok)
+         src=172.20.10.178 dst=34.223.124.45
+  [TCP ] sport=50630 dport=80 seq=1 ack=1 (raw seq=650825482 ack=677619700)
+         hlen=32 flags=ACK win=63 cksum=0x55f9 urg=0 opts=[NOP, NOP, TS val=1956638898 ecr=495161532]
+#10   22:35:43.870441  OUT  TCP  172.20.10.178:50630 -> 34.223.124.45:80  len=142
+  [ETH ] dst=00:15:5d:68:46:ed src=00:15:5d:bb:93:90 type=0x0800(IPv4)
+  [IP  ] ver=4 hlen=20 tos=0x00 total=128 id=0x4766 flags=DF frag=0 ttl=64 proto=6(TCP) cksum=0x9d3f(ok)
+         src=172.20.10.178 dst=34.223.124.45
+  [TCP ] sport=50630 dport=80 seq=1 ack=1 (raw seq=650825482 ack=677619700)
+         hlen=32 flags=ACK,PSH win=63 cksum=0x5645 urg=0 opts=[NOP, NOP, TS val=1956638898 ecr=495161532]
   [HTTP] GET / HTTP/1.1
          Host: neverssl.com
          User-Agent: curl/8.18.0
          Accept: */*
-#7    17:06:00.220243  IN   TCP  34.223.124.45:80 -> 172.23.242.174:37440  len=66
-  [ETH ] dst=00:15:5d:7f:f3:5d src=00:15:5d:88:1f:e6 type=0x0800(IPv4)
-  [IP  ] ver=4 hlen=20 tos=0x00 total=52 id=0x9eaa flags=DF frag=0 ttl=243 proto=6(TCP) cksum=0xab46(ok)
-         src=34.223.124.45 dst=172.23.242.174
-  [TCP ] sport=80 dport=37440 seq=1 ack=77 (raw seq=2674100553 ack=938148141)
-         hlen=32 flags=ACK win=210 cksum=0xcf35 urg=0 opts=[NOP, NOP, TS val=3393242510 ecr=2019126372]
-#8    17:06:00.220518  IN   TCP  34.223.124.45:80 -> 172.23.242.174:37440  len=2962
-  [ETH ] dst=00:15:5d:7f:f3:5d src=00:15:5d:88:1f:e6 type=0x0800(IPv4)
-  [IP  ] ver=4 hlen=20 tos=0x00 total=2948 id=0x9eab flags=DF frag=0 ttl=243 proto=6(TCP) cksum=0x9ff5(ok)
-         src=34.223.124.45 dst=172.23.242.174
-  [TCP ] sport=80 dport=37440 seq=1 ack=77 (raw seq=2674100553 ack=938148141)
-         hlen=32 flags=ACK win=210 cksum=0x3dd9 urg=0 opts=[NOP, NOP, TS val=3393242510 ecr=2019126372]
+#11   22:35:44.036059  IN   TCP  34.223.124.45:80 -> 172.20.10.178:50630  len=66
+  [ETH ] dst=00:15:5d:bb:93:90 src=00:15:5d:68:46:ed type=0x0800(IPv4)
+  [IP  ] ver=4 hlen=20 tos=0x00 total=52 id=0x5ef9 flags=DF frag=0 ttl=241 proto=6(TCP) cksum=0xd4f7(ok)
+         src=34.223.124.45 dst=172.20.10.178
+  [TCP ] sport=80 dport=50630 seq=1 ack=77 (raw seq=677619700 ack=650825558)
+         hlen=32 flags=ACK win=229 cksum=0x7f3a urg=0 opts=[NOP, NOP, TS val=495161702 ecr=1956638898]
+#12   22:35:44.416746  IN   TCP  34.223.124.45:80 -> 172.20.10.178:50630  len=4327
+  [ETH ] dst=00:15:5d:bb:93:90 src=00:15:5d:68:46:ed type=0x0800(IPv4)
+  [IP  ] ver=4 hlen=20 tos=0x00 total=4313 id=0x5efa flags=DF frag=0 ttl=241 proto=6(TCP) cksum=0xc451(ok)
+         src=34.223.124.45 dst=172.20.10.178
+  [TCP ] sport=80 dport=50630 seq=1 ack=77 (raw seq=677619700 ack=650825558)
+         hlen=32 flags=ACK,PSH win=229 cksum=0x669e urg=0 opts=[NOP, NOP, TS val=495162083 ecr=1956638898]
   [HTTP] HTTP/1.1 200 OK
-         Date: Mon, 23 Nov 2026 08:05:59 GMT
+         Date: Mon, 23 Nov 2026 13:35:41 GMT
          Server: Apache/2.4.68 ()
          Upgrade: h2,h2c
          Connection: Upgrade
@@ -61,222 +85,209 @@
          Content-Length: 3961
          Vary: Accept-Encoding
          Content-Type: text/html; charset=UTF-8
-         body: 2596 bytes
-#9    17:06:00.220519  IN   TCP  34.223.124.45:80 -> 172.23.242.174:37440  len=1431
-  [ETH ] dst=00:15:5d:7f:f3:5d src=00:15:5d:88:1f:e6 type=0x0800(IPv4)
-  [IP  ] ver=4 hlen=20 tos=0x00 total=1417 id=0x9ead flags=DF frag=0 ttl=243 proto=6(TCP) cksum=0xa5ee(ok)
-         src=34.223.124.45 dst=172.23.242.174
-  [TCP ] sport=80 dport=37440 seq=2897 ack=77 (raw seq=2674103449 ack=938148141)
-         hlen=32 flags=ACK,PSH win=210 cksum=0xb2b9 urg=0 opts=[NOP, NOP, TS val=3393242510 ecr=2019126372]
-  [HTTP] continuation 1365 bytes
-#10   17:06:00.220609  OUT  TCP  172.23.242.174:37440 -> 34.223.124.45:80  len=66
-  [ETH ] dst=00:15:5d:88:1f:e6 src=00:15:5d:7f:f3:5d type=0x0800(IPv4)
-  [IP  ] ver=4 hlen=20 tos=0x00 total=52 id=0x5901 flags=DF frag=0 ttl=64 proto=6(TCP) cksum=0xa3f0(ok)
-         src=172.23.242.174 dst=34.223.124.45
-  [TCP ] sport=37440 dport=80 seq=77 ack=2897 (raw seq=938148141 ack=2674103449)
-         hlen=32 flags=ACK win=137 cksum=0x3df9 urg=0 opts=[NOP, NOP, TS val=2019126569 ecr=3393242510]
-#11   17:06:00.220631  OUT  TCP  172.23.242.174:37440 -> 34.223.124.45:80  len=66
-  [ETH ] dst=00:15:5d:88:1f:e6 src=00:15:5d:7f:f3:5d type=0x0800(IPv4)
-  [IP  ] ver=4 hlen=20 tos=0x00 total=52 id=0x5902 flags=DF frag=0 ttl=64 proto=6(TCP) cksum=0xa3ef(ok)
-         src=172.23.242.174 dst=34.223.124.45
-  [TCP ] sport=37440 dport=80 seq=77 ack=4262 (raw seq=938148141 ack=2674104814)
-         hlen=32 flags=ACK win=143 cksum=0x3df9 urg=0 opts=[NOP, NOP, TS val=2019126569 ecr=3393242510]
-#12   17:06:00.221090  OUT  TCP  172.23.242.174:37440 -> 34.223.124.45:80  len=66
-  [ETH ] dst=00:15:5d:88:1f:e6 src=00:15:5d:7f:f3:5d type=0x0800(IPv4)
-  [IP  ] ver=4 hlen=20 tos=0x00 total=52 id=0x5903 flags=DF frag=0 ttl=64 proto=6(TCP) cksum=0xa3ee(ok)
-         src=172.23.242.174 dst=34.223.124.45
-  [TCP ] sport=37440 dport=80 seq=77 ack=4262 (raw seq=938148141 ack=2674104814)
-         hlen=32 flags=ACK,FIN win=143 cksum=0x3df9 urg=0 opts=[NOP, NOP, TS val=2019126569 ecr=3393242510]
-#13   17:06:00.287670  OUT  UDP  172.23.242.174:60765 -> 8.8.8.8:53  len=94
-  [ETH ] dst=00:15:5d:88:1f:e6 src=00:15:5d:7f:f3:5d type=0x0800(IPv4)
-  [IP  ] ver=4 hlen=20 tos=0x00 total=80 id=0x8c89 flags=- frag=0 ttl=64 proto=17(UDP) cksum=0x3f3e(ok)
-         src=172.23.242.174 dst=8.8.8.8
-  [UDP ] sport=60765 dport=53 len=60 cksum=0xaf23(offload)
-  [DNS ] Standard query 0x01ce A example.com
-         id=0x01ce flags=0x0120 qr=0 opcode=0 aa=0 tc=0 rd=1 ra=0 z=0 ad=1 cd=0 rcode=0(No error)
+         body: 3961 bytes
+#13   22:35:44.416783  OUT  TCP  172.20.10.178:50630 -> 34.223.124.45:80  len=66
+  [ETH ] dst=00:15:5d:68:46:ed src=00:15:5d:bb:93:90 type=0x0800(IPv4)
+  [IP  ] ver=4 hlen=20 tos=0x00 total=52 id=0x4767 flags=DF frag=0 ttl=64 proto=6(TCP) cksum=0x9d8a(ok)
+         src=172.20.10.178 dst=34.223.124.45
+  [TCP ] sport=50630 dport=80 seq=77 ack=4262 (raw seq=650825558 ack=677623961)
+         hlen=32 flags=ACK win=71 cksum=0x55f9 urg=0 opts=[NOP, NOP, TS val=1956639445 ecr=495162083]
+#14   22:35:44.416891  OUT  TCP  172.20.10.178:50630 -> 34.223.124.45:80  len=66
+  [ETH ] dst=00:15:5d:68:46:ed src=00:15:5d:bb:93:90 type=0x0800(IPv4)
+  [IP  ] ver=4 hlen=20 tos=0x00 total=52 id=0x4768 flags=DF frag=0 ttl=64 proto=6(TCP) cksum=0x9d89(ok)
+         src=172.20.10.178 dst=34.223.124.45
+  [TCP ] sport=50630 dport=80 seq=77 ack=4262 (raw seq=650825558 ack=677623961)
+         hlen=32 flags=ACK,FIN win=71 cksum=0x55f9 urg=0 opts=[NOP, NOP, TS val=1956639445 ecr=495162083]
+#15   22:35:44.579956  IN   TCP  34.223.124.45:80 -> 172.20.10.178:50630  len=66
+  [ETH ] dst=00:15:5d:bb:93:90 src=00:15:5d:68:46:ed type=0x0800(IPv4)
+  [IP  ] ver=4 hlen=20 tos=0x00 total=52 id=0x5efd flags=DF frag=0 ttl=241 proto=6(TCP) cksum=0xd4f3(ok)
+         src=34.223.124.45 dst=172.20.10.178
+  [TCP ] sport=80 dport=50630 seq=4262 ack=78 (raw seq=677623961 ack=650825559)
+         hlen=32 flags=ACK,FIN win=229 cksum=0x6a50 urg=0 opts=[NOP, NOP, TS val=495162246 ecr=1956639445]
+#16   22:35:44.580022  OUT  TCP  172.20.10.178:50630 -> 34.223.124.45:80  len=66
+  [ETH ] dst=00:15:5d:68:46:ed src=00:15:5d:bb:93:90 type=0x0800(IPv4)
+  [IP  ] ver=4 hlen=20 tos=0x00 total=52 id=0x4769 flags=DF frag=0 ttl=64 proto=6(TCP) cksum=0x9d88(ok)
+         src=172.20.10.178 dst=34.223.124.45
+  [TCP ] sport=50630 dport=80 seq=78 ack=4263 (raw seq=650825559 ack=677623962)
+         hlen=32 flags=ACK win=71 cksum=0x55f9 urg=0 opts=[NOP, NOP, TS val=1956639608 ecr=495162246]
+[CONN] 172.20.10.178:50630 <-> 34.223.124.45:80  (HTTP)
+  연결설정  #1    OUT SYN      seq=0
+            #8    IN  ACK,SYN  seq=0 ack=1
+            #9    OUT ACK      seq=1 ack=1      (3-way handshake 완료)
+  데이터    OUT 1개 세그먼트 76 bytes / IN 1개 세그먼트 4,261 bytes
+  연결해제  #14   OUT ACK,FIN  seq=77 ack=4262
+            #15   IN  ACK,FIN  seq=4262 ack=78
+            #16   OUT ACK      seq=78 ack=4263      (정상 종료)
+#17   22:35:45.434474  OUT  UDP  172.20.10.178:39481 -> 8.8.8.8:53  len=94
+  [ETH ] dst=00:15:5d:68:46:ed src=00:15:5d:bb:93:90 type=0x0800(IPv4)
+  [IP  ] ver=4 hlen=20 tos=0x00 total=80 id=0xeab7 flags=- frag=0 ttl=64 proto=17(UDP) cksum=0xc90f(ok)
+         src=172.20.10.178 dst=8.8.8.8
+  [UDP ] sport=39481 dport=53 len=60 cksum=0xc723(offload)
+  [DNS ] Standard query 0xc480 A example.com
+         id=0xc480 flags=0x0120 qr=0 opcode=0 aa=0 tc=0 rd=1 ra=0 z=0 ad=1 cd=0 rcode=0(No error)
          questions=1 answers=0 authority=0 additional=1
          Q   example.com  type=A class=IN
          AR  <Root>  type=OPT len=12  udp_payload=1232 ext_rcode=0 version=0 do=0 options=COOKIE(8B)
-#14   17:06:00.332303  IN   UDP  8.8.8.8:53 -> 172.23.242.174:60765  len=114
-  [ETH ] dst=00:15:5d:7f:f3:5d src=00:15:5d:88:1f:e6 type=0x0800(IPv4)
-  [IP  ] ver=4 hlen=20 tos=0x00 total=100 id=0xc83f flags=- frag=0 ttl=110 proto=17(UDP) cksum=0xd573(ok)
-         src=8.8.8.8 dst=172.23.242.174
-  [UDP ] sport=53 dport=60765 len=80 cksum=0xac9a(ok)
-  [DNS ] Standard query response 0x01ce A example.com A 172.66.147.243 A 104.20.23.154
-         id=0x01ce flags=0x81a0 qr=1 opcode=0 aa=0 tc=0 rd=1 ra=1 z=0 ad=1 cd=0 rcode=0(No error)
+#18   22:35:45.504821  IN   UDP  8.8.8.8:53 -> 172.20.10.178:39481  len=114
+  [ETH ] dst=00:15:5d:bb:93:90 src=00:15:5d:68:46:ed type=0x0800(IPv4)
+  [IP  ] ver=4 hlen=20 tos=0x00 total=100 id=0xaabf flags=- frag=0 ttl=103 proto=17(UDP) cksum=0xe1f3(ok)
+         src=8.8.8.8 dst=172.20.10.178
+  [UDP ] sport=53 dport=39481 len=80 cksum=0x250c(ok)
+  [DNS ] Standard query response 0xc480 A example.com A 172.66.147.243 A 104.20.23.154
+         id=0xc480 flags=0x81a0 qr=1 opcode=0 aa=0 tc=0 rd=1 ra=1 z=0 ad=1 cd=0 rcode=0(No error)
          questions=1 answers=2 authority=0 additional=1
          Q   example.com  type=A class=IN
          AN  example.com  type=A class=IN ttl=300 len=4  172.66.147.243
          AN  example.com  type=A class=IN ttl=300 len=4  104.20.23.154
          AR  <Root>  type=OPT len=0  udp_payload=512 ext_rcode=0 version=0 do=0
-#15   17:06:00.359600  OUT  UDP  172.23.242.174:54643 -> 8.8.8.8:53  len=93
-  [ETH ] dst=00:15:5d:88:1f:e6 src=00:15:5d:7f:f3:5d type=0x0800(IPv4)
-  [IP  ] ver=4 hlen=20 tos=0x00 total=79 id=0xc0c4 flags=- frag=0 ttl=64 proto=17(UDP) cksum=0x0b04(ok)
-         src=172.23.242.174 dst=8.8.8.8
-  [UDP ] sport=54643 dport=53 len=59 cksum=0xaf22(offload)
-  [DNS ] Standard query 0x8259 AAAA google.com
-         id=0x8259 flags=0x0120 qr=0 opcode=0 aa=0 tc=0 rd=1 ra=0 z=0 ad=1 cd=0 rcode=0(No error)
+#19   22:35:45.511071  OUT  UDP  172.20.10.178:44720 -> 8.8.8.8:53  len=93
+  [ETH ] dst=00:15:5d:68:46:ed src=00:15:5d:bb:93:90 type=0x0800(IPv4)
+  [IP  ] ver=4 hlen=20 tos=0x00 total=79 id=0x9065 flags=- frag=0 ttl=64 proto=17(UDP) cksum=0x2363(ok)
+         src=172.20.10.178 dst=8.8.8.8
+  [UDP ] sport=44720 dport=53 len=59 cksum=0xc722(offload)
+  [DNS ] Standard query 0xd3ab AAAA google.com
+         id=0xd3ab flags=0x0120 qr=0 opcode=0 aa=0 tc=0 rd=1 ra=0 z=0 ad=1 cd=0 rcode=0(No error)
          questions=1 answers=0 authority=0 additional=1
          Q   google.com  type=AAAA class=IN
          AR  <Root>  type=OPT len=12  udp_payload=1232 ext_rcode=0 version=0 do=0 options=COOKIE(8B)
-#16   17:06:00.364409  IN   TCP  34.223.124.45:80 -> 172.23.242.174:37440  len=66
-  [ETH ] dst=00:15:5d:7f:f3:5d src=00:15:5d:88:1f:e6 type=0x0800(IPv4)
-  [IP  ] ver=4 hlen=20 tos=0x00 total=52 id=0x9eae flags=DF frag=0 ttl=243 proto=6(TCP) cksum=0xab42(ok)
-         src=34.223.124.45 dst=172.23.242.174
-  [TCP ] sport=80 dport=37440 seq=4262 ack=78 (raw seq=2674104814 ack=938148142)
-         hlen=32 flags=ACK,FIN win=210 cksum=0xbd05 urg=0 opts=[NOP, NOP, TS val=3393242706 ecr=2019126569]
-#17   17:06:00.364470  OUT  TCP  172.23.242.174:37440 -> 34.223.124.45:80  len=66
-  [ETH ] dst=00:15:5d:88:1f:e6 src=00:15:5d:7f:f3:5d type=0x0800(IPv4)
-  [IP  ] ver=4 hlen=20 tos=0x00 total=52 id=0x5904 flags=DF frag=0 ttl=64 proto=6(TCP) cksum=0xa3ed(ok)
-         src=172.23.242.174 dst=34.223.124.45
-  [TCP ] sport=37440 dport=80 seq=78 ack=4263 (raw seq=938148142 ack=2674104815)
-         hlen=32 flags=ACK win=143 cksum=0x3df9 urg=0 opts=[NOP, NOP, TS val=2019126713 ecr=3393242706]
-[CONN] 172.23.242.174:37440 <-> 34.223.124.45:80  (HTTP)
-  연결설정  #1    OUT SYN      seq=0
-            #4    IN  ACK,SYN  seq=0 ack=1
-            #5    OUT ACK      seq=1 ack=1      (3-way handshake 완료)
-  데이터    OUT 1개 세그먼트 76 bytes / IN 2개 세그먼트 4,261 bytes
-  연결해제  #12   OUT ACK,FIN  seq=77 ack=4262
-            #16   IN  ACK,FIN  seq=4262 ack=78
-            #17   OUT ACK      seq=78 ack=4263      (정상 종료)
-#18   17:06:00.400903  IN   UDP  8.8.8.8:53 -> 172.23.242.174:54643  len=193
-  [ETH ] dst=00:15:5d:7f:f3:5d src=00:15:5d:88:1f:e6 type=0x0800(IPv4)
-  [IP  ] ver=4 hlen=20 tos=0x00 total=179 id=0x1744 flags=- frag=0 ttl=109 proto=17(UDP) cksum=0x8720(ok)
-         src=8.8.8.8 dst=172.23.242.174
-  [UDP ] sport=53 dport=54643 len=159 cksum=0xc2bf(ok)
-  [DNS ] Standard query response 0x8259 AAAA google.com AAAA 2404:6800:400a:1000::64 AAAA 2404:6800:400a:1000::8b AAAA 2404:6800:400a:1000::8a AAAA 2404:6800:400a:1000::71
-         id=0x8259 flags=0x8180 qr=1 opcode=0 aa=0 tc=0 rd=1 ra=1 z=0 ad=0 cd=0 rcode=0(No error)
+#20   22:35:45.589719  IN   UDP  8.8.8.8:53 -> 172.20.10.178:44720  len=193
+  [ETH ] dst=00:15:5d:bb:93:90 src=00:15:5d:68:46:ed type=0x0800(IPv4)
+  [IP  ] ver=4 hlen=20 tos=0x00 total=179 id=0x62e2 flags=- frag=0 ttl=114 proto=17(UDP) cksum=0x1e82(ok)
+         src=8.8.8.8 dst=172.20.10.178
+  [UDP ] sport=53 dport=44720 len=159 cksum=0xc036(ok)
+  [DNS ] Standard query response 0xd3ab AAAA google.com AAAA 2404:6800:400b:c006::66 AAAA 2404:6800:400b:c006::64 AAAA 2404:6800:400b:c006::71 AAAA 2404:6800:400b:c006::8a
+         id=0xd3ab flags=0x8180 qr=1 opcode=0 aa=0 tc=0 rd=1 ra=1 z=0 ad=0 cd=0 rcode=0(No error)
          questions=1 answers=4 authority=0 additional=1
          Q   google.com  type=AAAA class=IN
-         AN  google.com  type=AAAA class=IN ttl=300 len=16  2404:6800:400a:1000::64
-         AN  google.com  type=AAAA class=IN ttl=300 len=16  2404:6800:400a:1000::8b
-         AN  google.com  type=AAAA class=IN ttl=300 len=16  2404:6800:400a:1000::8a
-         AN  google.com  type=AAAA class=IN ttl=300 len=16  2404:6800:400a:1000::71
+         AN  google.com  type=AAAA class=IN ttl=300 len=16  2404:6800:400b:c006::66
+         AN  google.com  type=AAAA class=IN ttl=300 len=16  2404:6800:400b:c006::64
+         AN  google.com  type=AAAA class=IN ttl=300 len=16  2404:6800:400b:c006::71
+         AN  google.com  type=AAAA class=IN ttl=300 len=16  2404:6800:400b:c006::8a
          AR  <Root>  type=OPT len=0  udp_payload=512 ext_rcode=0 version=0 do=0
-#19   17:06:00.420296  OUT  UDP  172.23.242.174:35027 -> 8.8.8.8:53  len=92
-  [ETH ] dst=00:15:5d:88:1f:e6 src=00:15:5d:7f:f3:5d type=0x0800(IPv4)
-  [IP  ] ver=4 hlen=20 tos=0x00 total=78 id=0x673f flags=- frag=0 ttl=64 proto=17(UDP) cksum=0x648a(ok)
-         src=172.23.242.174 dst=8.8.8.8
-  [UDP ] sport=35027 dport=53 len=58 cksum=0xaf21(offload)
-  [DNS ] Standard query 0xa60b MX gmail.com
-         id=0xa60b flags=0x0120 qr=0 opcode=0 aa=0 tc=0 rd=1 ra=0 z=0 ad=1 cd=0 rcode=0(No error)
+#21   22:35:45.596343  OUT  UDP  172.20.10.178:52054 -> 8.8.8.8:53  len=92
+  [ETH ] dst=00:15:5d:68:46:ed src=00:15:5d:bb:93:90 type=0x0800(IPv4)
+  [IP  ] ver=4 hlen=20 tos=0x00 total=78 id=0x2272 flags=- frag=0 ttl=64 proto=17(UDP) cksum=0x9157(ok)
+         src=172.20.10.178 dst=8.8.8.8
+  [UDP ] sport=52054 dport=53 len=58 cksum=0xc721(offload)
+  [DNS ] Standard query 0xfee5 MX gmail.com
+         id=0xfee5 flags=0x0120 qr=0 opcode=0 aa=0 tc=0 rd=1 ra=0 z=0 ad=1 cd=0 rcode=0(No error)
          questions=1 answers=0 authority=0 additional=1
          Q   gmail.com  type=MX class=IN
          AR  <Root>  type=OPT len=12  udp_payload=1232 ext_rcode=0 version=0 do=0 options=COOKIE(8B)
-#20   17:06:00.457562  IN   UDP  8.8.8.8:53 -> 172.23.242.174:35027  len=203
-  [ETH ] dst=00:15:5d:7f:f3:5d src=00:15:5d:88:1f:e6 type=0x0800(IPv4)
-  [IP  ] ver=4 hlen=20 tos=0x00 total=189 id=0x8d4f flags=- frag=0 ttl=110 proto=17(UDP) cksum=0x100b(ok)
-         src=8.8.8.8 dst=172.23.242.174
-  [UDP ] sport=53 dport=35027 len=169 cksum=0xbff1(ok)
-  [DNS ] Standard query response 0xa60b MX gmail.com MX 30 alt3.gmail-smtp-in.l.google.com MX 20 alt2.gmail-smtp-in.l.google.com MX 40 alt4.gmail-smtp-in.l.google.com MX 10 alt1.gmail-smtp-in.l.google.com …
-         id=0xa60b flags=0x8180 qr=1 opcode=0 aa=0 tc=0 rd=1 ra=1 z=0 ad=0 cd=0 rcode=0(No error)
+#22   22:35:45.656054  IN   UDP  8.8.8.8:53 -> 172.20.10.178:52054  len=203
+  [ETH ] dst=00:15:5d:bb:93:90 src=00:15:5d:68:46:ed type=0x0800(IPv4)
+  [IP  ] ver=4 hlen=20 tos=0x00 total=189 id=0x227e flags=- frag=0 ttl=103 proto=17(UDP) cksum=0x69dc(ok)
+         src=8.8.8.8 dst=172.20.10.178
+  [UDP ] sport=53 dport=52054 len=169 cksum=0x048d(ok)
+  [DNS ] Standard query response 0xfee5 MX gmail.com MX 10 alt1.gmail-smtp-in.l.google.com MX 40 alt4.gmail-smtp-in.l.google.com MX 30 alt3.gmail-smtp-in.l.google.com MX 5 gmail-smtp-in.l.google.com …
+         id=0xfee5 flags=0x8180 qr=1 opcode=0 aa=0 tc=0 rd=1 ra=1 z=0 ad=0 cd=0 rcode=0(No error)
          questions=1 answers=5 authority=0 additional=1
          Q   gmail.com  type=MX class=IN
-         AN  gmail.com  type=MX class=IN ttl=3473 len=32  30 alt3.gmail-smtp-in.l.google.com
-         AN  gmail.com  type=MX class=IN ttl=3473 len=9  20 alt2.gmail-smtp-in.l.google.com
-         AN  gmail.com  type=MX class=IN ttl=3473 len=9  40 alt4.gmail-smtp-in.l.google.com
-         AN  gmail.com  type=MX class=IN ttl=3473 len=9  10 alt1.gmail-smtp-in.l.google.com
-         AN  gmail.com  type=MX class=IN ttl=3473 len=4  5 gmail-smtp-in.l.google.com
+         AN  gmail.com  type=MX class=IN ttl=3323 len=32  10 alt1.gmail-smtp-in.l.google.com
+         AN  gmail.com  type=MX class=IN ttl=3323 len=9  40 alt4.gmail-smtp-in.l.google.com
+         AN  gmail.com  type=MX class=IN ttl=3323 len=9  30 alt3.gmail-smtp-in.l.google.com
+         AN  gmail.com  type=MX class=IN ttl=3323 len=4  5 gmail-smtp-in.l.google.com
+         AN  gmail.com  type=MX class=IN ttl=3323 len=9  20 alt2.gmail-smtp-in.l.google.com
          AR  <Root>  type=OPT len=0  udp_payload=512 ext_rcode=0 version=0 do=0
-#21   17:06:00.479442  OUT  UDP  172.23.242.174:53945 -> 8.8.8.8:53  len=97
-  [ETH ] dst=00:15:5d:88:1f:e6 src=00:15:5d:7f:f3:5d type=0x0800(IPv4)
-  [IP  ] ver=4 hlen=20 tos=0x00 total=83 id=0x4023 flags=- frag=0 ttl=64 proto=17(UDP) cksum=0x8ba1(ok)
-         src=172.23.242.174 dst=8.8.8.8
-  [UDP ] sport=53945 dport=53 len=63 cksum=0xaf26(offload)
-  [DNS ] Standard query 0xe0d0 A www.github.com
-         id=0xe0d0 flags=0x0120 qr=0 opcode=0 aa=0 tc=0 rd=1 ra=0 z=0 ad=1 cd=0 rcode=0(No error)
+#23   22:35:45.662608  OUT  UDP  172.20.10.178:34332 -> 8.8.8.8:53  len=97
+  [ETH ] dst=00:15:5d:68:46:ed src=00:15:5d:bb:93:90 type=0x0800(IPv4)
+  [IP  ] ver=4 hlen=20 tos=0x00 total=83 id=0x6645 flags=- frag=0 ttl=64 proto=17(UDP) cksum=0x4d7f(ok)
+         src=172.20.10.178 dst=8.8.8.8
+  [UDP ] sport=34332 dport=53 len=63 cksum=0xc726(offload)
+  [DNS ] Standard query 0x95aa A www.github.com
+         id=0x95aa flags=0x0120 qr=0 opcode=0 aa=0 tc=0 rd=1 ra=0 z=0 ad=1 cd=0 rcode=0(No error)
          questions=1 answers=0 authority=0 additional=1
          Q   www.github.com  type=A class=IN
          AR  <Root>  type=OPT len=12  udp_payload=1232 ext_rcode=0 version=0 do=0 options=COOKIE(8B)
-#22   17:06:00.531284  IN   UDP  8.8.8.8:53 -> 172.23.242.174:53945  len=115
-  [ETH ] dst=00:15:5d:7f:f3:5d src=00:15:5d:88:1f:e6 type=0x0800(IPv4)
-  [IP  ] ver=4 hlen=20 tos=0x00 total=101 id=0xd6da flags=- frag=0 ttl=109 proto=17(UDP) cksum=0xc7d7(ok)
-         src=8.8.8.8 dst=172.23.242.174
-  [UDP ] sport=53 dport=53945 len=81 cksum=0x1348(ok)
-  [DNS ] Standard query response 0xe0d0 A www.github.com CNAME github.com A 20.200.245.247
-         id=0xe0d0 flags=0x8180 qr=1 opcode=0 aa=0 tc=0 rd=1 ra=1 z=0 ad=0 cd=0 rcode=0(No error)
+#24   22:35:45.733880  IN   UDP  8.8.8.8:53 -> 172.20.10.178:34332  len=115
+  [ETH ] dst=00:15:5d:bb:93:90 src=00:15:5d:68:46:ed type=0x0800(IPv4)
+  [IP  ] ver=4 hlen=20 tos=0x00 total=101 id=0x255c flags=- frag=0 ttl=104 proto=17(UDP) cksum=0x6656(ok)
+         src=8.8.8.8 dst=172.20.10.178
+  [UDP ] sport=53 dport=34332 len=81 cksum=0x949c(ok)
+  [DNS ] Standard query response 0x95aa A www.github.com CNAME github.com A 20.200.245.247
+         id=0x95aa flags=0x8180 qr=1 opcode=0 aa=0 tc=0 rd=1 ra=1 z=0 ad=0 cd=0 rcode=0(No error)
          questions=1 answers=2 authority=0 additional=1
          Q   www.github.com  type=A class=IN
-         AN  www.github.com  type=CNAME class=IN ttl=3579 len=2  github.com
+         AN  www.github.com  type=CNAME class=IN ttl=3178 len=2  github.com
          AN  github.com  type=A class=IN ttl=60 len=4  20.200.245.247
          AR  <Root>  type=OPT len=0  udp_payload=512 ext_rcode=0 version=0 do=0
-#23   17:06:00.552367  OUT  TCP  172.23.242.174:33471 -> 8.8.8.8:53  len=74
-  [ETH ] dst=00:15:5d:88:1f:e6 src=00:15:5d:7f:f3:5d type=0x0800(IPv4)
-  [IP  ] ver=4 hlen=20 tos=0x00 total=60 id=0x05c3 flags=DF frag=0 ttl=64 proto=6(TCP) cksum=0x8623(ok)
-         src=172.23.242.174 dst=8.8.8.8
-  [TCP ] sport=33471 dport=53 seq=0 ack=- (raw seq=1175118045 ack=0)
-         hlen=40 flags=SYN win=64660 cksum=0xaf04 urg=0 opts=[MSS=1220, SACK_PERM, TS val=793028495 ecr=0, NOP, WS=9]
-#24   17:06:00.590501  IN   TCP  8.8.8.8:53 -> 172.23.242.174:33471  len=74
-  [ETH ] dst=00:15:5d:7f:f3:5d src=00:15:5d:88:1f:e6 type=0x0800(IPv4)
-  [IP  ] ver=4 hlen=20 tos=0x00 total=60 id=0x0000 flags=DF frag=0 ttl=109 proto=6(TCP) cksum=0x5ee6(ok)
-         src=8.8.8.8 dst=172.23.242.174
-  [TCP ] sport=53 dport=33471 seq=0 ack=1 (raw seq=2111406364 ack=1175118046)
-         hlen=40 flags=ACK,SYN win=65535 cksum=0x3125 urg=0 opts=[MSS=1412, SACK_PERM, TS val=1631160131 ecr=793028495, NOP, WS=8]
-#25   17:06:00.590661  OUT  TCP  172.23.242.174:33471 -> 8.8.8.8:53  len=66
-  [ETH ] dst=00:15:5d:88:1f:e6 src=00:15:5d:7f:f3:5d type=0x0800(IPv4)
-  [IP  ] ver=4 hlen=20 tos=0x00 total=52 id=0x05c4 flags=DF frag=0 ttl=64 proto=6(TCP) cksum=0x862a(ok)
-         src=172.23.242.174 dst=8.8.8.8
-  [TCP ] sport=33471 dport=53 seq=1 ack=1 (raw seq=1175118046 ack=2111406365)
-         hlen=32 flags=ACK win=127 cksum=0xaefc urg=0 opts=[NOP, NOP, TS val=793028533 ecr=1631160131]
-#26   17:06:00.591030  OUT  TCP  172.23.242.174:33471 -> 8.8.8.8:53  len=120
-  [ETH ] dst=00:15:5d:88:1f:e6 src=00:15:5d:7f:f3:5d type=0x0800(IPv4)
-  [IP  ] ver=4 hlen=20 tos=0x00 total=106 id=0x05c5 flags=DF frag=0 ttl=64 proto=6(TCP) cksum=0x85f3(ok)
-         src=172.23.242.174 dst=8.8.8.8
-  [TCP ] sport=33471 dport=53 seq=1 ack=1 (raw seq=1175118046 ack=2111406365)
-         hlen=32 flags=ACK,PSH win=127 cksum=0xaf32 urg=0 opts=[NOP, NOP, TS val=793028533 ecr=1631160131]
-  [DNS ] Standard query 0xd72d A example.com
-         id=0xd72d flags=0x0120 qr=0 opcode=0 aa=0 tc=0 rd=1 ra=0 z=0 ad=1 cd=0 rcode=0(No error)
+#25   22:35:45.740210  OUT  TCP  172.20.10.178:40540 -> 8.8.8.8:53  len=74
+  [ETH ] dst=00:15:5d:68:46:ed src=00:15:5d:bb:93:90 type=0x0800(IPv4)
+  [IP  ] ver=4 hlen=20 tos=0x00 total=60 id=0xcb46 flags=DF frag=0 ttl=64 proto=6(TCP) cksum=0xa89f(ok)
+         src=172.20.10.178 dst=8.8.8.8
+  [TCP ] sport=40540 dport=53 seq=0 ack=- (raw seq=1280307870 ack=0)
+         hlen=40 flags=SYN win=64660 cksum=0xc704 urg=0 opts=[MSS=1220, SACK_PERM, TS val=1240419679 ecr=0, NOP, WS=10]
+#26   22:35:45.799111  IN   TCP  8.8.8.8:53 -> 172.20.10.178:40540  len=74
+  [ETH ] dst=00:15:5d:bb:93:90 src=00:15:5d:68:46:ed type=0x0800(IPv4)
+  [IP  ] ver=4 hlen=20 tos=0x00 total=60 id=0x0000 flags=DF frag=0 ttl=103 proto=6(TCP) cksum=0x4ce6(ok)
+         src=8.8.8.8 dst=172.20.10.178
+  [TCP ] sport=53 dport=40540 seq=0 ack=1 (raw seq=2551679767 ack=1280307871)
+         hlen=40 flags=ACK,SYN win=65535 cksum=0xed88 urg=0 opts=[MSS=1412, SACK_PERM, TS val=3676184739 ecr=1240419679, NOP, WS=8]
+#27   22:35:45.799166  OUT  TCP  172.20.10.178:40540 -> 8.8.8.8:53  len=66
+  [ETH ] dst=00:15:5d:68:46:ed src=00:15:5d:bb:93:90 type=0x0800(IPv4)
+  [IP  ] ver=4 hlen=20 tos=0x00 total=52 id=0xcb47 flags=DF frag=0 ttl=64 proto=6(TCP) cksum=0xa8a6(ok)
+         src=172.20.10.178 dst=8.8.8.8
+  [TCP ] sport=40540 dport=53 seq=1 ack=1 (raw seq=1280307871 ack=2551679768)
+         hlen=32 flags=ACK win=64 cksum=0xc6fc urg=0 opts=[NOP, NOP, TS val=1240419738 ecr=3676184739]
+#28   22:35:45.799218  OUT  TCP  172.20.10.178:40540 -> 8.8.8.8:53  len=120
+  [ETH ] dst=00:15:5d:68:46:ed src=00:15:5d:bb:93:90 type=0x0800(IPv4)
+  [IP  ] ver=4 hlen=20 tos=0x00 total=106 id=0xcb48 flags=DF frag=0 ttl=64 proto=6(TCP) cksum=0xa86f(ok)
+         src=172.20.10.178 dst=8.8.8.8
+  [TCP ] sport=40540 dport=53 seq=1 ack=1 (raw seq=1280307871 ack=2551679768)
+         hlen=32 flags=ACK,PSH win=64 cksum=0xc732 urg=0 opts=[NOP, NOP, TS val=1240419738 ecr=3676184739]
+  [DNS ] Standard query 0x9c38 A example.com
+         id=0x9c38 flags=0x0120 qr=0 opcode=0 aa=0 tc=0 rd=1 ra=0 z=0 ad=1 cd=0 rcode=0(No error)
          questions=1 answers=0 authority=0 additional=1
          Q   example.com  type=A class=IN
          AR  <Root>  type=OPT len=12  udp_payload=1232 ext_rcode=0 version=0 do=0 options=COOKIE(8B)
-#27   17:06:00.625936  IN   TCP  8.8.8.8:53 -> 172.23.242.174:33471  len=66
-  [ETH ] dst=00:15:5d:7f:f3:5d src=00:15:5d:88:1f:e6 type=0x0800(IPv4)
-  [IP  ] ver=4 hlen=20 tos=0x00 total=52 id=0xa7d4 flags=- frag=0 ttl=109 proto=6(TCP) cksum=0xf719(ok)
-         src=8.8.8.8 dst=172.23.242.174
-  [TCP ] sport=53 dport=33471 seq=1 ack=55 (raw seq=2111406365 ack=1175118100)
-         hlen=32 flags=ACK win=1050 cksum=0x5b25 urg=0 opts=[NOP, NOP, TS val=1631160170 ecr=793028533]
-#28   17:06:00.631362  IN   TCP  8.8.8.8:53 -> 172.23.242.174:33471  len=140
-  [ETH ] dst=00:15:5d:7f:f3:5d src=00:15:5d:88:1f:e6 type=0x0800(IPv4)
-  [IP  ] ver=4 hlen=20 tos=0x00 total=126 id=0xa7d5 flags=- frag=0 ttl=109 proto=6(TCP) cksum=0xf6ce(ok)
-         src=8.8.8.8 dst=172.23.242.174
-  [TCP ] sport=53 dport=33471 seq=1 ack=55 (raw seq=2111406365 ack=1175118100)
-         hlen=32 flags=ACK,PSH win=1050 cksum=0xceda urg=0 opts=[NOP, NOP, TS val=1631160176 ecr=793028533]
-  [DNS ] Standard query response 0xd72d A example.com A 172.66.147.243 A 104.20.23.154
-         id=0xd72d flags=0x81a0 qr=1 opcode=0 aa=0 tc=0 rd=1 ra=1 z=0 ad=1 cd=0 rcode=0(No error)
+#29   22:35:45.859423  IN   TCP  8.8.8.8:53 -> 172.20.10.178:40540  len=66
+  [ETH ] dst=00:15:5d:bb:93:90 src=00:15:5d:68:46:ed type=0x0800(IPv4)
+  [IP  ] ver=4 hlen=20 tos=0x00 total=52 id=0x6516 flags=- frag=0 ttl=103 proto=6(TCP) cksum=0x27d8(ok)
+         src=8.8.8.8 dst=172.20.10.178
+  [TCP ] sport=53 dport=40540 seq=1 ack=55 (raw seq=2551679768 ack=1280307925)
+         hlen=32 flags=ACK win=1050 cksum=0x175e urg=0 opts=[NOP, NOP, TS val=3676184800 ecr=1240419738]
+#30   22:35:45.865900  IN   TCP  8.8.8.8:53 -> 172.20.10.178:40540  len=140
+  [ETH ] dst=00:15:5d:bb:93:90 src=00:15:5d:68:46:ed type=0x0800(IPv4)
+  [IP  ] ver=4 hlen=20 tos=0x00 total=126 id=0x6517 flags=- frag=0 ttl=103 proto=6(TCP) cksum=0x278d(ok)
+         src=8.8.8.8 dst=172.20.10.178
+  [TCP ] sport=53 dport=40540 seq=1 ack=55 (raw seq=2551679768 ack=1280307925)
+         hlen=32 flags=ACK,PSH win=1050 cksum=0xc608 urg=0 opts=[NOP, NOP, TS val=3676184806 ecr=1240419738]
+  [DNS ] Standard query response 0x9c38 A example.com A 172.66.147.243 A 104.20.23.154
+         id=0x9c38 flags=0x81a0 qr=1 opcode=0 aa=0 tc=0 rd=1 ra=1 z=0 ad=1 cd=0 rcode=0(No error)
          questions=1 answers=2 authority=0 additional=1
          Q   example.com  type=A class=IN
          AN  example.com  type=A class=IN ttl=300 len=4  172.66.147.243
          AN  example.com  type=A class=IN ttl=300 len=4  104.20.23.154
          AR  <Root>  type=OPT len=0  udp_payload=512 ext_rcode=0 version=0 do=0
-#29   17:06:00.631483  OUT  TCP  172.23.242.174:33471 -> 8.8.8.8:53  len=66
-  [ETH ] dst=00:15:5d:88:1f:e6 src=00:15:5d:7f:f3:5d type=0x0800(IPv4)
-  [IP  ] ver=4 hlen=20 tos=0x00 total=52 id=0x05c6 flags=DF frag=0 ttl=64 proto=6(TCP) cksum=0x8628(ok)
-         src=172.23.242.174 dst=8.8.8.8
-  [TCP ] sport=33471 dport=53 seq=55 ack=75 (raw seq=1175118100 ack=2111406439)
-         hlen=32 flags=ACK win=127 cksum=0xaefc urg=0 opts=[NOP, NOP, TS val=793028574 ecr=1631160176]
-#30   17:06:00.633004  OUT  TCP  172.23.242.174:33471 -> 8.8.8.8:53  len=66
-  [ETH ] dst=00:15:5d:88:1f:e6 src=00:15:5d:7f:f3:5d type=0x0800(IPv4)
-  [IP  ] ver=4 hlen=20 tos=0x00 total=52 id=0x05c7 flags=DF frag=0 ttl=64 proto=6(TCP) cksum=0x8627(ok)
-         src=172.23.242.174 dst=8.8.8.8
-  [TCP ] sport=33471 dport=53 seq=55 ack=75 (raw seq=1175118100 ack=2111406439)
-         hlen=32 flags=ACK,FIN win=127 cksum=0xaefc urg=0 opts=[NOP, NOP, TS val=793028575 ecr=1631160176]
-#31   17:06:00.668423  IN   TCP  8.8.8.8:53 -> 172.23.242.174:33471  len=66
-  [ETH ] dst=00:15:5d:7f:f3:5d src=00:15:5d:88:1f:e6 type=0x0800(IPv4)
-  [IP  ] ver=4 hlen=20 tos=0x00 total=52 id=0xa7d6 flags=- frag=0 ttl=109 proto=6(TCP) cksum=0xf717(ok)
-         src=8.8.8.8 dst=172.23.242.174
-  [TCP ] sport=53 dport=33471 seq=75 ack=56 (raw seq=2111406439 ack=1175118101)
-         hlen=32 flags=ACK,FIN win=1050 cksum=0x5a85 urg=0 opts=[NOP, NOP, TS val=1631160212 ecr=793028575]
-#32   17:06:00.668510  OUT  TCP  172.23.242.174:33471 -> 8.8.8.8:53  len=66
-  [ETH ] dst=00:15:5d:88:1f:e6 src=00:15:5d:7f:f3:5d type=0x0800(IPv4)
-  [IP  ] ver=4 hlen=20 tos=0x00 total=52 id=0x05c8 flags=DF frag=0 ttl=64 proto=6(TCP) cksum=0x8626(ok)
-         src=172.23.242.174 dst=8.8.8.8
-  [TCP ] sport=33471 dport=53 seq=56 ack=76 (raw seq=1175118101 ack=2111406440)
-         hlen=32 flags=ACK win=127 cksum=0xaefc urg=0 opts=[NOP, NOP, TS val=793028611 ecr=1631160212]
-[CONN] 172.23.242.174:33471 <-> 8.8.8.8:53  (DNS)
-  연결설정  #23   OUT SYN      seq=0
-            #24   IN  ACK,SYN  seq=0 ack=1
-            #25   OUT ACK      seq=1 ack=1      (3-way handshake 완료)
+#31   22:35:45.865941  OUT  TCP  172.20.10.178:40540 -> 8.8.8.8:53  len=66
+  [ETH ] dst=00:15:5d:68:46:ed src=00:15:5d:bb:93:90 type=0x0800(IPv4)
+  [IP  ] ver=4 hlen=20 tos=0x00 total=52 id=0xcb49 flags=DF frag=0 ttl=64 proto=6(TCP) cksum=0xa8a4(ok)
+         src=172.20.10.178 dst=8.8.8.8
+  [TCP ] sport=40540 dport=53 seq=55 ack=75 (raw seq=1280307925 ack=2551679842)
+         hlen=32 flags=ACK win=64 cksum=0xc6fc urg=0 opts=[NOP, NOP, TS val=1240419805 ecr=3676184806]
+#32   22:35:45.866367  OUT  TCP  172.20.10.178:40540 -> 8.8.8.8:53  len=66
+  [ETH ] dst=00:15:5d:68:46:ed src=00:15:5d:bb:93:90 type=0x0800(IPv4)
+  [IP  ] ver=4 hlen=20 tos=0x00 total=52 id=0xcb4a flags=DF frag=0 ttl=64 proto=6(TCP) cksum=0xa8a3(ok)
+         src=172.20.10.178 dst=8.8.8.8
+  [TCP ] sport=40540 dport=53 seq=55 ack=75 (raw seq=1280307925 ack=2551679842)
+         hlen=32 flags=ACK,FIN win=64 cksum=0xc6fc urg=0 opts=[NOP, NOP, TS val=1240419805 ecr=3676184806]
+#33   22:35:45.925290  IN   TCP  8.8.8.8:53 -> 172.20.10.178:40540  len=66
+  [ETH ] dst=00:15:5d:bb:93:90 src=00:15:5d:68:46:ed type=0x0800(IPv4)
+  [IP  ] ver=4 hlen=20 tos=0x00 total=52 id=0x6518 flags=- frag=0 ttl=103 proto=6(TCP) cksum=0x27d6(ok)
+         src=8.8.8.8 dst=172.20.10.178
+  [TCP ] sport=53 dport=40540 seq=75 ack=56 (raw seq=2551679842 ack=1280307926)
+         hlen=32 flags=ACK,FIN win=1050 cksum=0x168e urg=0 opts=[NOP, NOP, TS val=3676184865 ecr=1240419805]
+#34   22:35:45.925333  OUT  TCP  172.20.10.178:40540 -> 8.8.8.8:53  len=66
+  [ETH ] dst=00:15:5d:68:46:ed src=00:15:5d:bb:93:90 type=0x0800(IPv4)
+  [IP  ] ver=4 hlen=20 tos=0x00 total=52 id=0xcb4b flags=DF frag=0 ttl=64 proto=6(TCP) cksum=0xa8a2(ok)
+         src=172.20.10.178 dst=8.8.8.8
+  [TCP ] sport=40540 dport=53 seq=56 ack=76 (raw seq=1280307926 ack=2551679843)
+         hlen=32 flags=ACK win=64 cksum=0xc6fc urg=0 opts=[NOP, NOP, TS val=1240419864 ecr=3676184865]
+[CONN] 172.20.10.178:40540 <-> 8.8.8.8:53  (DNS)
+  연결설정  #25   OUT SYN      seq=0
+            #26   IN  ACK,SYN  seq=0 ack=1
+            #27   OUT ACK      seq=1 ack=1      (3-way handshake 완료)
   데이터    OUT 1개 세그먼트 54 bytes / IN 1개 세그먼트 74 bytes
-  연결해제  #30   OUT ACK,FIN  seq=55 ack=75
-            #31   IN  ACK,FIN  seq=75 ack=56
-            #32   OUT ACK      seq=56 ack=76      (정상 종료)
+  연결해제  #32   OUT ACK,FIN  seq=55 ack=75
+            #33   IN  ACK,FIN  seq=75 ack=56
+            #34   OUT ACK      seq=56 ack=76      (정상 종료)
