@@ -109,7 +109,15 @@ class TestTcpTracker(unittest.TestCase):
         conn = t.remaining()[0]
         self.assertEqual(conn.key, (*CLIENT, *SERVER))
         self.assertEqual(conn.handshake, [])
-        self.assertEqual(pkts[0].rel_seq, 0)
+        # Wireshark처럼 처음 본 세그먼트가 seq=1 ack=1 → SYN을 본 연결(test_relative_seq_ack_like_wireshark)과 같은 번호
+        self.assertEqual([(p.rel_seq, p.rel_ack) for p in pkts], [(1, 1), (1, 39), (1, 39), (1001, 39)])
+        self.assertEqual(conn.data_bytes, {"OUT": 38, "IN": 1500})
+
+    def test_opened_before_capture_server_first(self):
+        # 서버 쪽 세그먼트부터 보면 클라이언트 기준은 그 ack - 1 (tshark와 같은 값)
+        pkts = curl_session()[4:7]
+        self.run_all(pkts)
+        self.assertEqual([(p.rel_seq, p.rel_ack) for p in pkts], [(1, 1), (1, 1), (1001, 1)])
 
     def test_late_packet_after_close_is_not_new_connection(self):
         pkts = curl_session()

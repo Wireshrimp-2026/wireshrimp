@@ -107,6 +107,15 @@ class TestHeaders(unittest.TestCase):
         self.assertEqual(len(app.lines[1]), MAX_SHOW + 1)
         self.assertEqual(len(app.fields["headers"]["Cookie"]), 500)          # fields에는 원래 값
 
+    def test_c1_control_chars_are_escaped(self):
+        # U+009B(8비트 CSI)는 일부 터미널에서 ESC [ 처럼 동작한다 → 메일·BitTorrent 파서처럼 \xNN으로
+        evil = "HTTP/1.1 200 O\u009bK\r\nLocation: http://a/\u0085\u009b2J\r\nX-Name: 새우\r\n\r\n".encode()
+        app = parse_http(evil)
+        self.assertEqual(app.summary, "HTTP/1.1 200 O\\x9bK")
+        self.assertEqual(app.lines[0], "Location: http://a/\\x85\\x9b2J")
+        self.assertEqual(app.lines[1], "X-Name: 새우")                        # 한글은 그대로
+        self.assertEqual(app.fields["headers"]["Location"], "http://a/\u0085\u009b2J")   # fields에는 원래 값
+
     def test_non_ascii_does_not_fail(self):
         app = parse_http("HTTP/1.1 200 OK\r\nX-Name: 새우\r\n\r\n".encode() + b"\xff\xfe")
         self.assertEqual(app.fields["headers"]["X-Name"], "새우")

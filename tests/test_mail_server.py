@@ -13,6 +13,7 @@ import importlib.util
 import io
 import pathlib
 import poplib
+import signal
 import smtplib
 import socket
 import threading
@@ -459,6 +460,30 @@ class TestLifecycle(unittest.TestCase):
         self.assertIn("분석기 옵션: --port smtp=", text)
         self.assertIn('curl "imap://127.0.0.1:', text)
         self.assertIn("종료합니다", text)
+        self.assertEqual(mail_threads(), [])
+
+    def test_main_stops_on_signals_even_when_started_in_background(self):
+        # bash에서 '&'로 띄우면 SIGINT가 무시 상태로 물려받아진다 → main()이 되살리고, 끝나면 원래대로
+        old_int = signal.signal(signal.SIGINT, signal.SIG_IGN)
+        old_term = signal.getsignal(signal.SIGTERM)
+        seen = {}
+
+        def fake_sleep(_seconds):
+            seen["int"] = signal.getsignal(signal.SIGINT)
+            seen["term"] = signal.getsignal(signal.SIGTERM)
+            raise KeyboardInterrupt
+
+        try:
+            with mock.patch.object(ms.time, "sleep", side_effect=fake_sleep), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                code = ms.main(["--smtp", "0", "--pop3", "0", "--imap", "0", "--bind", HOST])
+            self.assertEqual(code, 0)
+            self.assertIs(seen["int"], signal.default_int_handler)
+            self.assertIs(seen["term"], signal.default_int_handler)        # kill(SIGTERM)도 정리하고 끝냄
+            self.assertIs(signal.getsignal(signal.SIGINT), signal.SIG_IGN)  # 끝나면 원래 처리기로
+            self.assertIs(signal.getsignal(signal.SIGTERM), old_term)
+        finally:
+            signal.signal(signal.SIGINT, old_int)
         self.assertEqual(mail_threads(), [])
 
     def test_main_needs_sudo_for_low_ports(self):

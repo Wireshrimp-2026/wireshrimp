@@ -8,7 +8,10 @@
 #              RDATA (A, AAAA, CNAME, NS, MX, PTR, TXT, SOA, SRV, OPT(EDNS), 그 밖은 hex)
 #            - 이름 압축 포인터(0xC0) 처리, 포인터 무한 반복 방지 (한 번 간 위치로 다시 가면 ValueError)
 #            - over_tcp면 앞 2바이트 길이를 이 함수가 뗀다 (dig +tcp)
-#            - summary는 Wireshark Info 칸과 같은 모양 (보고서 대조용)
+#            - summary는 Wireshark Info 칸과 같은 모양 (보고서 대조용): 질의 뒤에 Answer·Authority·Additional
+#              레코드를 모두 붙인다 (dig가 붙이는 OPT 포함). 값은 Wireshark가 붙이는 타입만
+#              (A, AAAA, NS, CNAME, PTR, DNAME, MX, SRV, SOA 주 서버, NSEC, HINFO, NAPTR, TLSA),
+#              TXT·OPT·DS·HTTPS 등은 타입 이름만. 모르는 타입은 "Unknown (번호)"
 #            - 이름·TXT의 출력할 수 없는 바이트는 dig처럼 \DDD로 바꾼다 (터미널 제어 문자 무력화)
 # 완료 기준: DNS 헤더·플래그·질의·응답(A, AAAA, CNAME, MX)이 UDP·TCP 모두 AppInfo로 나온다.
 # =============================================================================
@@ -16,20 +19,33 @@ from __future__ import annotations
 
 import ipaddress
 import struct
+from typing import Optional
 
 from ..models import AppInfo
 
 HEADER_LEN = 12
 MAX_NAME_LEN = 255            # 이름 최대 길이 (RFC 1035)
-MAX_SUMMARY_RECORDS = 4       # summary 한 줄에 넣을 응답 레코드 수 (나머지는 …)
+MAX_SUMMARY = 1000            # summary 최대 글자 수 (Wireshark처럼 레코드를 다 붙이되, 비정상적으로 긴 것만 자름)
 MAX_SHOW = 200                # 세부 줄 최대 글자 수
 
 TYPE_OPT = 41
+# IANA DNS RR TYPE 이름 (Wireshark가 쓰는 이름과 같음, 255는 "ANY"). 여기 없으면 "Unknown (번호)"
 TYPE_NAMES = {
-    1: "A", 2: "NS", 5: "CNAME", 6: "SOA", 12: "PTR", 15: "MX", 16: "TXT", 28: "AAAA",
-    33: "SRV", 41: "OPT", 43: "DS", 46: "RRSIG", 47: "NSEC", 48: "DNSKEY", 64: "SVCB",
-    65: "HTTPS", 252: "AXFR", 255: "ANY", 257: "CAA",
+    1: "A", 2: "NS", 3: "MD", 4: "MF", 5: "CNAME", 6: "SOA", 7: "MB", 8: "MG", 9: "MR", 10: "NULL",
+    11: "WKS", 12: "PTR", 13: "HINFO", 14: "MINFO", 15: "MX", 16: "TXT", 17: "RP", 18: "AFSDB",
+    19: "X25", 20: "ISDN", 21: "RT", 22: "NSAP", 23: "NSAP-PTR", 24: "SIG", 25: "KEY", 26: "PX",
+    27: "GPOS", 28: "AAAA", 29: "LOC", 30: "NXT", 31: "EID", 32: "NIMLOC", 33: "SRV", 34: "ATMA",
+    35: "NAPTR", 36: "KX", 37: "CERT", 38: "A6", 39: "DNAME", 40: "SINK", 41: "OPT", 42: "APL",
+    43: "DS", 44: "SSHFP", 45: "IPSECKEY", 46: "RRSIG", 47: "NSEC", 48: "DNSKEY", 49: "DHCID",
+    50: "NSEC3", 51: "NSEC3PARAM", 52: "TLSA", 53: "SMIMEA", 55: "HIP", 56: "NINFO", 57: "RKEY",
+    58: "TALINK", 59: "CDS", 60: "CDNSKEY", 61: "OPENPGPKEY", 62: "CSYNC", 63: "ZONEMD",
+    64: "SVCB", 65: "HTTPS", 99: "SPF", 100: "UINFO", 101: "UID", 102: "GID", 103: "UNSPEC",
+    104: "NID", 105: "L32", 106: "L64", 107: "LP", 108: "EUI48", 109: "EUI64", 249: "TKEY",
+    250: "TSIG", 251: "IXFR", 252: "AXFR", 253: "MAILB", 254: "MAILA", 255: "ANY", 256: "URI",
+    257: "CAA", 258: "AVC", 259: "DOA", 260: "AMTRELAY", 32768: "TA", 32769: "DLV",
 }
+# Wireshark Info 칸에서 타입 이름 뒤에 세부 줄과 같은 값을 붙이는 타입: A NS CNAME PTR MX AAAA SRV DNAME
+INFO_SAME_AS_DATA = (1, 2, 5, 12, 15, 28, 33, 39)
 CLASS_NAMES = {1: "IN", 3: "CH", 4: "HS", 254: "NONE", 255: "ANY"}
 OPCODE_NAMES = {0: "Standard query", 1: "Inverse query", 2: "Server status request",
                 4: "Zone change notification", 5: "Dynamic update"}
@@ -46,7 +62,8 @@ def parse_dns(data: bytes, over_tcp: bool = False) -> AppInfo:
                "Standard query response 0x1a2b A neverssl.com A 34.223.124.45"
     fields 키: txid, is_response, opcode, rcode, flags(dict), questions(list), answers(list),
               authority(list), additional(list)
-              레코드 dict: name, type, type_name, class, ttl, rdlength, data(화면용 문자열)
+              레코드 dict: name, type, type_name, class, ttl, rdlength, data(화면용 문자열),
+                          info(summary에서 타입 이름 뒤에 붙는 값, 붙지 않는 타입이면 None)
     """
     msg = _strip_tcp_length(data) if over_tcp else data
     txid, flag_bits, qdcount, ancount, nscount, arcount = _unpack("!6H", msg, 0)
@@ -83,7 +100,7 @@ def parse_dns(data: bytes, over_tcp: bool = False) -> AppInfo:
     fields = {"txid": txid, "is_response": bool(flags["qr"]), "opcode": flags["opcode"],
               "rcode": flags["rcode"], "flags": flags, "questions": questions,
               "answers": answers, "authority": authority, "additional": additional}
-    return AppInfo(name="DNS", summary=_clip(_summary(txid, flags, questions, answers, authority)),
+    return AppInfo(name="DNS", summary=_clip(_summary(txid, flags, questions, sections), MAX_SUMMARY),
                    lines=lines, fields=fields)
 
 
@@ -145,6 +162,7 @@ def _read_record(msg: bytes, off: int) -> tuple[dict, int]:
         record["data"] = _opt_text(rclass, ttl, msg[start:end])
     else:
         record["data"] = _rdata_text(rtype, msg, start, end)
+    record["info"] = _info_text(record, msg, start, end)
     return record, end
 
 
@@ -156,7 +174,7 @@ def _rdata_text(rtype: int, msg: bytes, start: int, end: int) -> str:
     if rtype == 28:                                           # AAAA
         _need(rdata, 16, "AAAA")
         return str(ipaddress.IPv6Address(rdata))
-    if rtype in (2, 5, 12):                                   # NS, CNAME, PTR
+    if rtype in (2, 5, 12, 39):                               # NS, CNAME, PTR, DNAME
         return _name_in(msg, start, end)[0]
     if rtype == 15:                                           # MX
         (pref,) = _unpack("!H", msg[:end], start)
@@ -171,15 +189,44 @@ def _rdata_text(rtype: int, msg: bytes, start: int, end: int) -> str:
         prio, weight, port = _unpack("!HHH", msg[:end], start)
         return f"{prio} {weight} {port} {_name_in(msg, start + 6, end)[0]}"
     if rtype == 16:                                           # TXT: 길이 1바이트 + 문자열, 여러 개
-        parts, off = [], 0
-        while off < len(rdata):
-            n = rdata[off]
-            if off + 1 + n > len(rdata):
-                raise ValueError("DNS TXT string truncated")
-            parts.append('"' + _escape_text(rdata[off + 1:off + 1 + n]) + '"')
-            off += 1 + n
-        return " ".join(parts)
+        return " ".join(f'"{s}"' for s in _char_strings(rdata))
     return rdata.hex() if rdata else "(empty)"               # 그 밖의 타입은 hex
+
+
+def _info_text(record: dict, msg: bytes, start: int, end: int) -> Optional[str]:
+    """Wireshark Info 칸에서 타입 이름 뒤에 붙는 값. TXT·OPT·DS·HTTPS처럼 이름만 붙는 타입이면 None."""
+    rtype = record["type"]
+    if rtype in INFO_SAME_AS_DATA:
+        return record["data"]
+    if rtype == 6:                                            # SOA: 주 서버 이름만
+        return record["data"].split(" ", 1)[0]
+    try:                                                      # 아래는 세부 줄이 hex인 드문 타입
+        if rtype == 47:                                       # NSEC: 다음 이름
+            return _name_in(msg, start, end)[0]
+        if rtype == 13:                                       # HINFO: CPU OS
+            return " ".join(_char_strings(msg[start:end]))
+        if rtype == 35:                                       # NAPTR: order preference flags
+            order, pref, n = _unpack("!HHB", msg[:end], start)
+            if start + 5 + n > end:
+                raise ValueError("DNS NAPTR flags truncated")
+            return f"{order} {pref} {_escape_text(msg[start + 5:start + 5 + n])}"
+        if rtype == 52:                                       # TLSA: Wireshark는 소유자 이름을 붙인다
+            return record["name"]
+    except ValueError:
+        return None                   # 깨진 드문 레코드는 타입 이름만 (메시지 전체를 버리지 않음)
+    return None
+
+
+def _char_strings(rdata: bytes) -> list[str]:
+    """<character-string>(길이 1바이트 + 문자열) 여러 개 → 화면용 문자열 목록. 잘렸으면 ValueError."""
+    parts, off = [], 0
+    while off < len(rdata):
+        n = rdata[off]
+        if off + 1 + n > len(rdata):
+            raise ValueError("DNS character-string truncated")
+        parts.append(_escape_text(rdata[off + 1:off + 1 + n]))
+        off += 1 + n
+    return parts
 
 
 def _name_in(msg: bytes, off: int, end: int) -> tuple[str, int]:
@@ -221,24 +268,20 @@ def _flags(bits: int) -> dict:
             "rcode": bits & 0xF}
 
 
-def _summary(txid: int, flags: dict, questions: list, answers: list, authority: list) -> str:
-    """Wireshark Info 칸과 같은 모양.
+def _summary(txid: int, flags: dict, questions: list, sections: list) -> str:
+    """Wireshark Info 칸과 같은 모양. 질의 뒤에 Answer·Authority·Additional 레코드를 모두 붙인다.
 
-    "Standard query 0x1a2b A neverssl.com"
-    "Standard query response 0x1a2b No such name A nx.example.com SOA a.iana-servers.net"
+    "Standard query 0x1a2b A neverssl.com OPT"
+    "Standard query response 0x1a2b No such name A nx.example.com SOA a.iana-servers.net OPT"
     """
     op = OPCODE_NAMES.get(flags["opcode"], f"Unknown operation ({flags['opcode']})")
     parts = [op + (" response" if flags["qr"] else ""), f"0x{txid:04x}"]
     if flags["qr"] and flags["rcode"]:
         parts.append(rcode_name(flags["rcode"]))
     parts += [f"{q['type_name']} {q['name']}" for q in questions]
-    if flags["qr"]:
-        records = [r for r in answers + authority if r["type"] != TYPE_OPT]
-        for r in records[:MAX_SUMMARY_RECORDS]:
-            data = r["data"].split(" ", 1)[0] if r["type"] == 6 else r["data"]   # SOA는 주 서버만
-            parts.append(f"{r['type_name']} {data}")
-        if len(records) > MAX_SUMMARY_RECORDS:
-            parts.append("…")
+    for records in sections:
+        parts += [r["type_name"] if r["info"] is None else f"{r['type_name']} {r['info']}"
+                  for r in records]
     return " ".join(parts)
 
 
@@ -255,7 +298,7 @@ def _strip_tcp_length(data: bytes) -> bytes:
 # 작은 도우미
 # -----------------------------------------------------------------------------
 def type_name(t: int) -> str:
-    return TYPE_NAMES.get(t, f"TYPE{t}")
+    return TYPE_NAMES.get(t, f"Unknown ({t})")
 
 
 def class_name(c: int) -> str:
@@ -304,5 +347,5 @@ def _escape_text(raw: bytes) -> str:
     return "".join(out)
 
 
-def _clip(text: str) -> str:
-    return text if len(text) <= MAX_SHOW else text[:MAX_SHOW] + "…"
+def _clip(text: str, limit: int = MAX_SHOW) -> str:
+    return text if len(text) <= limit else text[:limit] + "…"
