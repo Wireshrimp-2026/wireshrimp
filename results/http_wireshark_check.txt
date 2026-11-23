@@ -1,0 +1,16 @@
+우리 출력 vs tshark(Wireshark 4.6.4) 대조 — 같은 pcap, 같은 패킷 번호
+패킷: 로그 34개 / pcap 34개
+비교한 필드: 664개, 다른 값: 10개
+
+필드: 시각·방향 프로토콜·주소·포트·프레임 길이 / IP total·id·DF·ttl·checksum / TCP 상대·raw seq·ack·hlen·flags·window·checksum / UDP length·checksum / DNS id·flags·요약줄(Wireshark Info 열) / HTTP 요청줄·상태줄
+
+  #17  dns.info               우리='Standard query 0xc480 A example.com'  tshark='Standard query 0xc480 A example.com OPT'
+  #18  dns.info               우리='Standard query response 0xc480 A example.com A 172.66.147.243 A 104.20.23.154'  tshark='Standard query response 0xc480 A example.com A 172.66.147.243 A 104.20.23.154 OPT'
+  #19  dns.info               우리='Standard query 0xd3ab AAAA google.com'  tshark='Standard query 0xd3ab AAAA google.com OPT'
+  #20  dns.info               우리='Standard query response 0xd3ab AAAA google.com AAAA 2404:6800:400b:c006::66 AAAA 2404:6800:400b:c006::64 AAAA 2404:6800:400b:c006::71 AAAA 2404:6800:400b:c006::8a'  tshark='Standard query response 0xd3ab AAAA google.com AAAA 2404:6800:400b:c006::66 AAAA 2404:6800:400b:c006::64 AAAA 2404:6800:400b:c006::71 AAAA 2404:6800:400b:c006::8a OPT'
+  #21  dns.info               우리='Standard query 0xfee5 MX gmail.com'  tshark='Standard query 0xfee5 MX gmail.com OPT'
+  #22  dns.info               우리='Standard query response 0xfee5 MX gmail.com MX 10 alt1.gmail-smtp-in.l.google.com MX 40 alt4.gmail-smtp-in.l.google.com MX 30 alt3.gmail-smtp-in.l.google.com MX 5 gmail-smtp-in.l.google.com …'  tshark='Standard query response 0xfee5 MX gmail.com MX 10 alt1.gmail-smtp-in.l.google.com MX 40 alt4.gmail-smtp-in.l.google.com MX 30 alt3.gmail-smtp-in.l.google.com MX 5 gmail-smtp-in.l.google.com MX 20 alt2.gmail-smtp-in.l.google.com OPT'
+  #23  dns.info               우리='Standard query 0x95aa A www.github.com'  tshark='Standard query 0x95aa A www.github.com OPT'
+  #24  dns.info               우리='Standard query response 0x95aa A www.github.com CNAME github.com A 20.200.245.247'  tshark='Standard query response 0x95aa A www.github.com CNAME github.com A 20.200.245.247 OPT'
+  #28  dns.info               우리='Standard query 0x9c38 A example.com'  tshark='Standard query 0x9c38 A example.com OPT'
+  #30  dns.info               우리='Standard query response 0x9c38 A example.com A 172.66.147.243 A 104.20.23.154'  tshark='Standard query response 0x9c38 A example.com A 172.66.147.243 A 104.20.23.154 OPT'
