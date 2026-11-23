@@ -6,7 +6,7 @@
 import struct
 import unittest
 
-from src.decode.app_dns import parse_dns, read_name
+from src.decode.app_dns import MAX_SUMMARY, parse_dns, read_name
 from src.decode.app_select import parse_app
 from src.models import DEFAULT_PORTS
 
@@ -47,7 +47,7 @@ class TestDigMessages(unittest.TestCase):
     def test_query(self):
         app = parse_dns(DIG_QUERY)
         self.assertEqual(app.name, "DNS")
-        self.assertEqual(app.summary, "Standard query 0x1a2b A neverssl.com")
+        self.assertEqual(app.summary, "Standard query 0x1a2b A neverssl.com OPT")   # Wireshark Info와 같음
         f = app.fields
         self.assertEqual(f["txid"], 0x1a2b)
         self.assertFalse(f["is_response"])
@@ -65,7 +65,7 @@ class TestDigMessages(unittest.TestCase):
 
     def test_response(self):
         app = parse_dns(DIG_RESPONSE)
-        self.assertEqual(app.summary, "Standard query response 0x1a2b A neverssl.com A 34.223.124.45")
+        self.assertEqual(app.summary, "Standard query response 0x1a2b A neverssl.com A 34.223.124.45 OPT")
         f = app.fields
         self.assertTrue(f["is_response"])
         self.assertEqual((f["flags"]["ra"], f["rcode"]), (1, 0))
@@ -127,18 +127,68 @@ class TestRecordTypes(unittest.TestCase):
             rr("45.124.223.34.in-addr.arpa", 12, name("neverssl.com")),
             rr("example.com", 16, b'\x0bv=spf1 -all\x08say "hi"'),
             rr("_sip._tcp.example.com", 33, struct.pack("!HHH", 10, 60, 5060) + name("sip.example.com")),
-            rr("example.com", 99, b"\xde\xad"),
+            rr("example.com", 4000, b"\xde\xad"),
         ])
-        data = [r["data"] for r in parse_dns(m).fields["answers"]]
+        app = parse_dns(m)
+        data = [r["data"] for r in app.fields["answers"]]
         self.assertEqual(data, ["a.iana-servers.net", "neverssl.com", '"v=spf1 -all" "say \\"hi\\""',
                                 "10 60 5060 sip.example.com", "dead"])
-        self.assertEqual(parse_dns(m).fields["answers"][4]["type_name"], "TYPE99")
+        self.assertEqual(app.fields["answers"][4]["type_name"], "Unknown (4000)")   # Wireshark와 같은 이름
+        # Wireshark Info: TXT·모르는 타입은 이름만, NS·PTR·SRV는 값까지
+        self.assertEqual(app.summary, "Standard query response 0x1234 ANY example.com NS a.iana-servers.net "
+                                      "PTR neverssl.com TXT SRV 10 60 5060 sip.example.com Unknown (4000)")
 
-    def test_summary_is_capped(self):
+    def test_rare_types_in_summary_like_wireshark(self):
+        # tshark 4.6.4 Info 칸과 대조한 모양
+        m = msg(questions=[("example.com", 255)], answers=[
+            rr("example.com", 39, name("example.net")),                                    # DNAME
+            rr("example.com", 13, b"\x03CPU\x02OS"),                                       # HINFO
+            rr("example.com", 35, struct.pack("!HH", 100, 10) + b"\x01U\x07E2U+sip\x00"
+               + name("sip.example.com")),                                                 # NAPTR
+            rr("example.com", 47, name("b.example.com") + b"\x00\x01\x40"),                # NSEC
+            rr("_443._tcp.example.com", 52, b"\x03\x01\x01" + bytes(32)),                  # TLSA
+            rr("example.com", 99, b"\x0bv=spf1 -all"),                                     # SPF
+            rr("example.com", 257, b"\x00\x05issueletsencrypt.org"),                       # CAA
+            rr("example.com", 65, b"\x00\x01\x00"),                                        # HTTPS
+        ])
+        app = parse_dns(m)
+        self.assertEqual(app.summary, "Standard query response 0x1234 ANY example.com DNAME example.net "
+                                      "HINFO CPU OS NAPTR 100 10 U NSEC b.example.com "
+                                      "TLSA _443._tcp.example.com SPF CAA HTTPS")
+        self.assertEqual(app.fields["answers"][0]["data"], "example.net")      # DNAME 세부 줄도 이름
+
+    def test_broken_rare_record_keeps_message(self):
+        # NAPTR flags 길이가 RDATA를 넘음 → summary에는 타입 이름만, 메시지는 그대로 해석
+        m = msg(questions=[("example.com", 35)], answers=[rr("example.com", 35, struct.pack("!HHB", 1, 2, 9))])
+        app = parse_dns(m)
+        self.assertEqual(app.summary, "Standard query response 0x1234 NAPTR example.com NAPTR")
+        self.assertIsNone(app.fields["answers"][0]["info"])
+
+    def test_summary_lists_every_record_like_wireshark(self):
         answers = [rr("many.example.com", 1, bytes([10, 0, 0, i])) for i in range(6)]
         app = parse_dns(msg(questions=[("many.example.com", 1)], answers=answers))
-        self.assertTrue(app.summary.endswith("A 10.0.0.3 …"))
-        self.assertEqual(len(app.fields["answers"]), 6)          # fields에는 전부
+        self.assertEqual(app.summary, "Standard query response 0x1234 A many.example.com "
+                                      + " ".join(f"A 10.0.0.{i}" for i in range(6)))
+        self.assertEqual(len(app.fields["answers"]), 6)
+
+    def test_summary_includes_authority_and_additional(self):
+        # 레퍼럴: Authority의 NS + Additional의 glue A·AAAA + OPT (tshark Info와 같음)
+        m = msg(flags=0x8100, questions=[("www.example.com", 1)],
+                authority=[rr("example.com", 2, name("a.iana-servers.net")),
+                           rr("example.com", 2, name("b.iana-servers.net"))],
+                additional=[rr("a.iana-servers.net", 1, bytes([199, 43, 135, 53])),
+                            rr("a.iana-servers.net", 28, bytes(15) + b"\x53"),
+                            b"\x00" + struct.pack("!HHIH", 41, 512, 0, 0)])
+        self.assertEqual(parse_dns(m).summary,
+                         "Standard query response 0x1234 A www.example.com NS a.iana-servers.net "
+                         "NS b.iana-servers.net A 199.43.135.53 AAAA ::53 OPT")
+
+    def test_very_long_summary_is_clipped(self):
+        answers = [rr("many.example.com", 1, bytes([10, 0, i // 256, i % 256])) for i in range(200)]
+        app = parse_dns(msg(questions=[("many.example.com", 1)], answers=answers))
+        self.assertEqual(len(app.summary), MAX_SUMMARY + 1)
+        self.assertTrue(app.summary.endswith("…"))
+        self.assertEqual(len(app.fields["answers"]), 200)        # fields에는 전부
 
 
 class TestNames(unittest.TestCase):
@@ -197,7 +247,7 @@ class TestThroughParseApp(unittest.TestCase):
     def test_udp_and_tcp(self):
         key = ("10.0.2.15", 40000, "8.8.8.8", 53)
         udp = parse_app(key, "UDP", 40000, 53, DIG_QUERY, DEFAULT_PORTS)
-        self.assertEqual(udp.summary, "Standard query 0x1a2b A neverssl.com")
+        self.assertEqual(udp.summary, "Standard query 0x1a2b A neverssl.com OPT")
         tcp = parse_app(key, "TCP", 53, 40000, struct.pack("!H", len(DIG_RESPONSE)) + DIG_RESPONSE,
                         DEFAULT_PORTS)
         self.assertEqual(tcp.fields["answers"][0]["data"], "34.223.124.45")
