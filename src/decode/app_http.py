@@ -105,7 +105,7 @@ def _parse_headers(raw_lines: list[str]) -> tuple[dict, list[str]]:
 
 
 def _show(text: str) -> str:
-    """화면용: 제어 문자(터미널 색·커서를 바꿀 수 있음)는 \\xNN으로, 너무 길면 … 로 자른다."""
-    safe = "".join(ch if ch == "\t" or (ord(ch) >= 0x20 and ord(ch) != 0x7F) else f"\\x{ord(ch):02x}"
-                   for ch in text)
+    """화면용: 제어 문자(터미널 색·커서를 바꿀 수 있음, C1 포함)는 \\xNN으로, 너무 길면 … 로 자른다."""
+    safe = "".join(ch if ch == "\t" or not (ord(ch) < 0x20 or 0x7F <= ord(ch) <= 0x9F)
+                   else f"\\x{ord(ch):02x}" for ch in text)
     return safe if len(safe) <= MAX_SHOW else safe[:MAX_SHOW] + "…"
