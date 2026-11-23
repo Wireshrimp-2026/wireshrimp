@@ -6,6 +6,8 @@
 #              순서가 바뀌어 늦게 온 세그먼트(빈 구간을 채움)는 재전송이 아니다. keep-alive(1바이트)는 세지 않음
 #            - 연결해제: FIN 교환 + 마지막 ACK (FIN,ACK가 겹쳐 3개로 끝나도 정상) / RST는 비정상 종료
 #            - 상대 Seq/Ack: pkt.rel_seq = seq - ISN, pkt.rel_ack = ack - 상대 ISN
+#              SYN을 못 본 연결(캡처 전에 열림)은 Wireshark처럼 처음 본 seq - 1, 반대쪽은 처음 본 ack - 1을
+#              ISN으로 본다 → 첫 세그먼트가 seq=1 ack=1
 #            - 연결 이름: 처음 판별된 pkt.app.name
 # 완료 기준: curl 1회가 연결 요약(Connection) 1개로 나온다 (연결설정 3개, 데이터, 연결해제).
 #            상대 Seq/Ack가 PacketInfo에 채워진다.
@@ -29,7 +31,7 @@ CLOSED_KEEP = 256
 @dataclass
 class _Side:
     """연결의 한쪽 끝(클라이언트 또는 서버) 상태."""
-    base: Optional[int] = None        # 상대 Seq 기준값 (SYN이면 ISN, 아니면 처음 본 seq)
+    base: Optional[int] = None        # 상대 Seq 기준값 (SYN이면 ISN, 아니면 처음 본 seq - 1 또는 반대쪽 ack - 1)
     max_end: int = 0                  # 지금까지 보낸 데이터의 끝 (상대값)
     ranges: list = field(default_factory=list)   # 받은 데이터 구간 [(시작, 끝), ...] 정렬·병합 — 재전송 판단
     fin_end: Optional[int] = None     # 보낸 FIN이 ACK 받으려면 필요한 상대 ack 값
@@ -100,7 +102,9 @@ class TcpTracker:
                 conn.isn_client = tcp["seq"]
                 conn.handshake.append(pkt)
         elif side.base is None:
-            side.base = tcp["seq"]                               # 캡처 전에 열린 연결
+            side.base = (tcp["seq"] - 1) % MOD                   # 캡처 전에 열린 연결: 첫 세그먼트가 seq=1
+        if bits & ACK and peer.base is None:
+            peer.base = (tcp["ack"] - 1) % MOD                   # 반대쪽을 아직 못 봄: ack = 반대쪽 다음 seq
 
         self._fill_relative(track, pkt, src)
 
