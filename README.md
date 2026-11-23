@@ -93,7 +93,7 @@ python3 -m unittest discover -s tests -t .
 
 PR을 올리거나 `main`에 push하면 GitHub Actions가 파이썬 3.10·3.12에서 문법 검사와 단위 테스트를 자동으로 돌립니다 ([tests.yml](.github/workflows/tests.yml)). 결과는 PR 화면의 ✓/✗와 Actions 탭에서 봅니다. raw socket 캡처는 CI에서 돌릴 수 없어 시연으로 확인합니다.
 
-> 진행 상황: A 담당(헤더 해석·연결 추적·출력·pcap)은 구현되어 있고, B 담당(응용 프로토콜·ICMP·traceroute)은 아직 뼈대입니다. 구현되지 않은 모듈은 실행 시 `미구현`으로 한 번 알리고 넘어가며, 그동안 응용 계층 데이터는 `[DATA]`로 나옵니다.
+> 진행 상황: A 담당(헤더 해석·연결 추적·출력·pcap)과 B 담당(응용 프로토콜 판별, HTTP·DNS·SMTP·POP3·IMAP·BitTorrent·TLS, ICMP·traceroute)이 모두 구현되어 있습니다. 응용 계층을 판별하지 못한 데이터(NTP 등 범위 밖 프로토콜, 앞 레코드가 이어지는 TLS 세그먼트)는 `[DATA]` N bytes와 앞 32바이트 hex로 나옵니다.
 
 ## 폴더 구조
 
